@@ -1,0 +1,42 @@
+# Cargo workspace root — apps/backend/Cargo.toml
+# The repo root has NO Cargo.toml. pnpm has no knowledge of this workspace.
+[workspace]
+members = [
+  "crates/kaya-core",
+  "crates/kaya-storage",
+  "crates/ee/kaya-billing",
+  "crates/ee/kaya-tenant",
+  "crates/ee/kaya-metering",
+  "crates/ee/kaya-postgres-storage",
+  "bin/kaya-oss",
+  "bin/kaya-cloud",
+]
+resolver = "2"
+
+[workspace.dependencies]
+# Async runtime
+tokio       = { version = "1", features = ["full"] }
+
+# HTTP
+axum        = { version = "0.8" }
+
+# OpenAPI
+utoipa      = { version = "5", features = ["axum_extras", "uuid"] }
+utoipa-axum = { version = "0.2" }
+
+# Serialisation
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+
+# Error handling
+thiserror   = "2"
+anyhow      = "1"
+
+# Utilities
+uuid        = { version = "1", features = ["v4", "serde"] }
+chrono      = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
+futures     = "0.3"
+
+# Testing
+trybuild    = { version = "1", features = ["diff"] }

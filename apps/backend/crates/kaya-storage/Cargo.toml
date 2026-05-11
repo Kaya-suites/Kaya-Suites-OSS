@@ -1,0 +1,16 @@
+[package]
+name    = "kaya-storage"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "SQLite storage adapter for Kaya Suites OSS (Apache 2.0)"
+
+[dependencies]
+kaya-core   = { path = "../kaya-core" }
+async-trait = { workspace = true }
+thiserror   = { workspace = true }
+uuid        = { workspace = true }
+
+# TODO: add sqlx with sqlite feature when implementing SqliteAdapter
+# sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
+# sqlite-vec will be added as a dynamic library / extension

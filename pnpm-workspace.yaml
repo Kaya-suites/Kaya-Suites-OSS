@@ -1,0 +1,9 @@
+packages:
+  - "apps/web"
+  - "packages/*"
+# Note: apps/backend is intentionally absent. pnpm does not manage the Rust workspace.
+
+# Build settings carried over from apps/web bootstrap
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver

@@ -1,0 +1,22 @@
+[package]
+name    = "kaya-cloud"
+version = "0.1.0"
+edition = "2024"
+license = "BUSL-1.1"
+description = "Hosted cloud binary for Kaya Suites (BSL 1.1)"
+
+# This is the ONLY place BSL crates are pulled in.
+[dependencies]
+kaya-core              = { path = "../../crates/kaya-core" }
+kaya-storage           = { path = "../../crates/kaya-storage" }
+kaya-billing           = { path = "../../crates/ee/kaya-billing" }
+kaya-tenant            = { path = "../../crates/ee/kaya-tenant" }
+kaya-metering          = { path = "../../crates/ee/kaya-metering" }
+kaya-postgres-storage  = { path = "../../crates/ee/kaya-postgres-storage" }
+
+axum        = { workspace = true }
+tokio       = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+utoipa      = { workspace = true }
+utoipa-axum = { workspace = true }

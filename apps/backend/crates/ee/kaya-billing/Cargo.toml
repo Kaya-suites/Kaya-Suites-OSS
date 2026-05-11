@@ -1,0 +1,11 @@
+[package]
+name    = "kaya-billing"
+version = "0.1.0"
+edition = "2024"
+license = "BUSL-1.1"
+description = "Stripe metered billing for Kaya Suites cloud (BSL 1.1)"
+
+[dependencies]
+kaya-core   = { path = "../../kaya-core" }
+async-trait = { workspace = true }
+thiserror   = { workspace = true }
