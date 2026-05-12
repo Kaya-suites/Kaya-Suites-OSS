@@ -110,12 +110,16 @@ impl AgentLoop {
 
     /// Run a single agent turn for `message`.
     ///
+    /// `prior_turns` is the conversation history as `(role, content)` pairs in
+    /// chronological order. Pass an empty slice for a fresh session.
+    ///
     /// Returns a stream of [`AgentEvent`]s. The stream ends after
     /// [`AgentEvent::FinalMessage`]. Dropping the stream mid-turn cancels
     /// cleanly (the spawned task notices the closed sender and returns).
     pub fn run(
         &self,
         message: String,
+        prior_turns: Vec<(String, String)>,
         ctx: Arc<AgentContext>,
         log: Arc<InvocationLog>,
     ) -> BoxStream<'static, Result<AgentEvent, KayaError>> {
@@ -125,7 +129,7 @@ impl AgentLoop {
         let (tx, rx) = mpsc::channel::<Result<AgentEvent, KayaError>>(32);
 
         tokio::spawn(async move {
-            agent_task(message, ctx, log, tools, max_turns, tx).await;
+            agent_task(message, prior_turns, ctx, log, tools, max_turns, tx).await;
         });
 
         Box::pin(rx)
@@ -136,6 +140,7 @@ impl AgentLoop {
 
 async fn agent_task(
     message: String,
+    prior_turns: Vec<(String, String)>,
     ctx: Arc<AgentContext>,
     log: Arc<InvocationLog>,
     tools: Vec<Arc<dyn Tool>>,
@@ -153,10 +158,25 @@ async fn agent_task(
 
     let system_prompt = build_system_prompt(&tools);
     let turn_id = Uuid::new_v4();
-    let mut history = String::new();
+    let mut tool_history = String::new();
+
+    // Format prior conversation turns as context before the current message.
+    let conversation_context = if prior_turns.is_empty() {
+        String::new()
+    } else {
+        let turns = prior_turns
+            .iter()
+            .map(|(role, content)| {
+                let label = if role == "assistant" { "Assistant" } else { "User" };
+                format!("{label}: {content}")
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        format!("\n\nConversation history:\n{turns}\n")
+    };
 
     for _ in 0..max_turns {
-        let prompt = format!("{system_prompt}\n\nUser: {message}\n{history}");
+        let prompt = format!("{system_prompt}{conversation_context}\nUser: {message}\n{tool_history}");
 
         let req = ToolCallRequest {
             prompt,
@@ -246,11 +266,11 @@ async fn agent_task(
                     }
                 }
 
-                // ── Append to conversation history ───────────────────────────
+                // ── Append to within-turn tool history ──────────────────────
                 let result_json = serde_json::to_string(&output_json).unwrap_or_default();
                 let args_json =
                     serde_json::to_string(&tool_call.arguments).unwrap_or_default();
-                history.push_str(&format!(
+                tool_history.push_str(&format!(
                     "\n[Calling: {}({args_json})]\n[Result]: {result_json}\n",
                     tool_call.tool_name,
                 ));

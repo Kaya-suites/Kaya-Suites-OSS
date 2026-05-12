@@ -329,6 +329,22 @@ async fn chat_stream(
             .into_response();
     };
 
+    // Load prior conversation history before inserting the new user message.
+    let prior_messages: Vec<(String, String)> = sqlx::query(
+        "SELECT role, content FROM messages WHERE session_id = ? ORDER BY created_at ASC",
+    )
+    .bind(session_id.to_string())
+    .fetch_all(&state.sessions_pool)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .filter_map(|row| {
+        let role: String = row.try_get("role").ok()?;
+        let content: String = row.try_get("content").ok()?;
+        Some((role, content))
+    })
+    .collect();
+
     // Update session message count and timestamp
     let now = Utc::now().timestamp_millis();
     let _ = sqlx::query(
@@ -355,7 +371,7 @@ async fn chat_stream(
     let message = body.message;
 
     tokio::spawn(async move {
-        run_agent_stream(state, router, session_id, message, tx).await;
+        run_agent_stream(state, router, session_id, message, prior_messages, tx).await;
     });
 
     let stream = ReceiverStream::new(rx).map(Ok::<_, Infallible>);
@@ -374,6 +390,7 @@ async fn run_agent_stream(
     router: Arc<ModelRouter>,
     session_id: Uuid,
     message: String,
+    prior_messages: Vec<(String, String)>,
     tx: tokio::sync::mpsc::Sender<Bytes>,
 ) {
     let session = UserSession { user_id: Uuid::nil() };
@@ -384,7 +401,7 @@ async fn run_agent_stream(
     });
     let log = Arc::new(InvocationLog::new());
     let agent = AgentLoop::new(default_tools());
-    let mut events = agent.run(message, ctx, log);
+    let mut events = agent.run(message, prior_messages, ctx, log);
 
     // Cache doc titles seen in tool results to annotate citations cheaply.
     let mut doc_title_cache: HashMap<Uuid, String> = HashMap::new();
