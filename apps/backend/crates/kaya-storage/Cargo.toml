@@ -10,7 +10,15 @@ kaya-core   = { path = "../kaya-core" }
 async-trait = { workspace = true }
 thiserror   = { workspace = true }
 uuid        = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+chrono      = { workspace = true }
+tokio       = { workspace = true }
+anyhow      = { workspace = true }
+sqlx        = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
+serde_yaml  = "0.9"
+sha2        = "0.10"
+walkdir     = "2"
 
-# TODO: add sqlx with sqlite feature when implementing SqliteAdapter
-# sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
-# sqlite-vec will be added as a dynamic library / extension
+[dev-dependencies]
+tempfile = "3"
