@@ -297,6 +297,16 @@ fn build_system_prompt(tools: &[Arc<dyn Tool>]) -> String {
          information, provide a final answer to the user without calling any more \
          tools.\n\
          \n\
+         CITATION RULES (required):\n\
+         When your final answer references specific content from a document, you \
+         MUST embed a citation marker immediately after the cited sentence using \
+         this exact format: [[DOC_ID:PARA_ID]]\n\
+         Replace DOC_ID with the document's UUID and PARA_ID with the paragraph_id \
+         from the tool result. These markers are rendered as clickable citation chips \
+         in the UI.\n\
+         Example: \"Revenue grew 12% last quarter. [[d1a2b3c4-e5f6-7890-abcd-ef1234567890:abc123def456]]\"\n\
+         Always include these markers when you have retrieved and used document content.\n\
+         \n\
          IMPORTANT: Never apply document edits directly. Always use propose_edit \
          or create_document so the user can review and approve the change."
     )

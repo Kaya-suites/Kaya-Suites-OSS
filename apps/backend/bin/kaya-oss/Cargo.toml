@@ -8,12 +8,20 @@ description = "OSS self-hosted binary for Kaya Suites (Apache 2.0)"
 # IMPORTANT: only Apache-licensed crates may appear here.
 # BSL crates (anything under crates/ee/) must never be listed as dependencies.
 [dependencies]
-kaya-core   = { path = "../../crates/kaya-core" }
+kaya-core    = { path = "../../crates/kaya-core" }
 kaya-storage = { path = "../../crates/kaya-storage" }
 
-axum        = { workspace = true }
-tokio       = { workspace = true }
-serde       = { workspace = true }
-serde_json  = { workspace = true }
-utoipa      = { workspace = true }
-utoipa-axum = { workspace = true }
+axum         = { workspace = true, features = ["macros"] }
+tokio        = { workspace = true }
+serde        = { workspace = true }
+serde_json   = { workspace = true }
+utoipa       = { workspace = true }
+utoipa-axum  = { workspace = true }
+uuid         = { workspace = true }
+chrono       = { workspace = true }
+futures      = { workspace = true }
+bytes        = { workspace = true }
+
+tower-http   = { version = "0.6", features = ["cors"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+sqlx         = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
