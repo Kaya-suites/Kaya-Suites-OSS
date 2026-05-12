@@ -1,0 +1,29 @@
+# Kaya Suites — LLM routing configuration
+#
+# Defaults follow BRD §8.3:
+#   fast model  (gpt-4o-mini)            → retrieval_classification, stale_detection
+#   strong model (claude-opus-4-6)        → document_generation, edit_proposal
+#   embedding model (text-embedding-3-small) → embedding
+
+routing:
+  retrieval_classification:
+    provider: openai
+    model: gpt-4o-mini
+  document_generation:
+    provider: anthropic
+    model: claude-opus-4-6
+  edit_proposal:
+    provider: anthropic
+    model: claude-opus-4-6
+  stale_detection:
+    provider: openai
+    model: gpt-4o-mini
+  embedding:
+    provider: openai
+    model: text-embedding-3-small
+
+providers:
+  openai:
+    api_key_env: OPENAI_API_KEY
+  anthropic:
+    api_key_env: ANTHROPIC_API_KEY
