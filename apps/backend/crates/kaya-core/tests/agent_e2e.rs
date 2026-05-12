@@ -26,7 +26,7 @@ use kaya_core::model_router::{
     ModelRouter, OperationType, StreamItem, ToolCallRequest, ToolCallResponse, ToolCallResult,
     TokenUsage,
 };
-use kaya_core::storage::{Document, Embedding, StorageAdapter, StorageError};
+use kaya_core::storage::{Chunk, ChunkHit, Document, Embedding, StorageAdapter, StorageError};
 
 // ── In-memory StorageAdapter ─────────────────────────────────────────────────
 
@@ -66,12 +66,17 @@ impl StorageAdapter for MemStorage {
     async fn list_documents(&self) -> Result<Vec<Document>, StorageError> {
         Ok(self.docs.lock().unwrap().values().cloned().collect())
     }
-    async fn search_embeddings(&self, _q: &[f32], _lim: usize) -> Result<Vec<Embedding>, StorageError> {
+    async fn search_embeddings(&self, _q: &[f32], _lim: usize) -> Result<Vec<ChunkHit>, StorageError> {
         Ok(vec![])
     }
     async fn save_embeddings(&self, _e: &Embedding) -> Result<(), StorageError> {
         Ok(())
     }
+    async fn save_chunk(&self, _c: &Chunk) -> Result<(), StorageError> { Ok(()) }
+    async fn delete_chunks_for_document(&self, _id: Uuid) -> Result<(), StorageError> { Ok(()) }
+    async fn get_chunk_hashes(&self, _id: Uuid) -> Result<Vec<(String, String)>, StorageError> { Ok(vec![]) }
+    async fn search_text(&self, _q: &str, _lim: usize) -> Result<Vec<ChunkHit>, StorageError> { Ok(vec![]) }
+    async fn delete_embeddings_for_paragraphs(&self, _id: Uuid, _pids: &[String]) -> Result<(), StorageError> { Ok(()) }
 }
 
 // ── Scripted LLM provider ─────────────────────────────────────────────────────

@@ -60,7 +60,7 @@ impl Tool for SearchDocuments {
                 results.push(json!({
                     "id": doc.id,
                     "title": doc.title,
-                    "chunk_index": hit.chunk_index,
+                    "paragraph_id": hit.paragraph_id,
                     "excerpt": &doc.body[..excerpt_end],
                 }));
             }
