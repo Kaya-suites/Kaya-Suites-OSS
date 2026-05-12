@@ -158,21 +158,33 @@ impl LlmProvider for AnthropicProvider {
         let json: Value =
             resp.json().await.map_err(|e| KayaError::Internal(e.to_string()))?;
 
-        let tool_result = json["content"]
-            .as_array()
-            .into_iter()
-            .flatten()
+        let blocks = json["content"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+
+        let tool_result = blocks
+            .iter()
             .find(|b| b["type"].as_str() == Some("tool_use"))
             .map(|b| ToolCallResult {
                 tool_name: b["name"].as_str().unwrap_or("").to_owned(),
                 arguments: b["input"].clone(),
             });
 
+        // Capture text response when the model chose not to call a tool.
+        let text_content = if tool_result.is_none() {
+            blocks
+                .iter()
+                .find(|b| b["type"].as_str() == Some("text"))
+                .and_then(|b| b["text"].as_str())
+                .map(str::to_owned)
+        } else {
+            None
+        };
+
         let (input_tokens, output_tokens) = extract_usage(&json);
         let model = json["model"].as_str().unwrap_or(&request.model).to_owned();
 
         Ok(ToolCallResponse {
             result: tool_result,
+            content: text_content,
             usage: TokenUsage {
                 input_tokens,
                 output_tokens,

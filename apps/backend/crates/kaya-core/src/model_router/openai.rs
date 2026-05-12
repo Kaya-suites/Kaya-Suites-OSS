@@ -205,12 +205,22 @@ impl LlmProvider for OpenAIProvider {
                 Some(ToolCallResult { tool_name: name, arguments })
             });
 
+        // Capture text response when the model chose not to call a tool.
+        let text_content = if tool_result.is_none() {
+            json["choices"][0]["message"]["content"]
+                .as_str()
+                .map(str::to_owned)
+        } else {
+            None
+        };
+
         let input_tokens = json["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32;
         let output_tokens = json["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32;
         let model = json["model"].as_str().unwrap_or(&request.model).to_owned();
 
         Ok(ToolCallResponse {
             result: tool_result,
+            content: text_content,
             usage: TokenUsage {
                 input_tokens,
                 output_tokens,

@@ -144,6 +144,9 @@ pub struct ToolCallRequest {
 #[derive(Debug, Clone)]
 pub struct ToolCallResponse {
     pub result: Option<ToolCallResult>,
+    /// Text content from the model when it chose *not* to call a tool.
+    /// This is the final answer the agent should surface as a [`FinalMessage`].
+    pub content: Option<String>,
     pub usage: TokenUsage,
 }
 
