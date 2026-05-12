@@ -107,7 +107,7 @@ pub async fn commit_edit(
     match edit.kind {
         ProposedEditKind::UpdateContent { document_id, new_content } => {
             let mut doc = storage.get_document(document_id).await?;
-            doc.content = new_content;
+            doc.body = new_content;
             storage.save_document(&doc).await?;
         }
         ProposedEditKind::DeleteDocument { document_id } => {
