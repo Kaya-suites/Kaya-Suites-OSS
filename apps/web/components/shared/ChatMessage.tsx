@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 import type { ChatMessageData, CitationRef } from "@/types/chat";
 import { DiffReview } from "./DiffReview";
+import { DeleteReview } from "./DeleteReview";
 
 type Props = {
   message: ChatMessageData;
@@ -12,6 +13,8 @@ type Props = {
   onCitationClick: (ref: CitationRef) => void;
   onApproveEdit: (editId: string, finalText: string) => Promise<void>;
   onRejectEdit: (editId: string) => void;
+  onApproveDelete: (editId: string) => Promise<void>;
+  onRejectDelete: (editId: string) => void;
 };
 
 // Replace [n] patterns with superscript citation chips
@@ -58,6 +61,8 @@ export function ChatMessage({
   onCitationClick,
   onApproveEdit,
   onRejectEdit,
+  onApproveDelete,
+  onRejectDelete,
 }: Props) {
   const isUser = message.role === "user";
 
@@ -189,6 +194,15 @@ export function ChatMessage({
             edit={message.proposedEdit}
             onApprove={onApproveEdit}
             onReject={onRejectEdit}
+          />
+        )}
+
+        {/* Delete confirmation panel */}
+        {message.proposedDelete && (
+          <DeleteReview
+            deletion={message.proposedDelete}
+            onApprove={onApproveDelete}
+            onReject={onRejectDelete}
           />
         )}
 

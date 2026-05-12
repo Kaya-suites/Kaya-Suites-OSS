@@ -6,6 +6,7 @@ import type {
   CitationRef,
   Role,
   SSEEvent,
+  ProposedDelete,
 } from "@/types/chat";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
@@ -197,6 +198,18 @@ export function ChatPanel({ sessionId, onCitationClick, onDocumentUpdated }: Pro
                     : m,
                 ),
               );
+            } else if (event.type === "ProposedDeleteEmitted") {
+              const deletion: ProposedDelete = {
+                id: event.editId,
+                docId: event.docId,
+                docTitle: event.docTitle,
+                status: "pending",
+              };
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, proposedDelete: deletion } : m,
+                ),
+              );
             } else if (event.type === "Done") {
               setStreamingId(null);
             } else if (event.type === "Error") {
@@ -259,6 +272,32 @@ export function ChatPanel({ sessionId, onCitationClick, onDocumentUpdated }: Pro
     );
   }
 
+  async function approveDelete(editId: string) {
+    const res = await fetch(`/api/edits/${editId}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new Error("approve failed");
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.proposedDelete?.id === editId && m.proposedDelete
+          ? { ...m, proposedDelete: { ...m.proposedDelete, status: "approved" } }
+          : m,
+      ),
+    );
+  }
+
+  function rejectDelete(editId: string) {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.proposedDelete?.id === editId && m.proposedDelete
+          ? { ...m, proposedDelete: { ...m.proposedDelete, status: "rejected" } }
+          : m,
+      ),
+    );
+  }
+
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Messages */}
@@ -271,6 +310,8 @@ export function ChatPanel({ sessionId, onCitationClick, onDocumentUpdated }: Pro
             onCitationClick={onCitationClick}
             onApproveEdit={approveEdit}
             onRejectEdit={rejectEdit}
+            onApproveDelete={approveDelete}
+            onRejectDelete={rejectDelete}
           />
         ))}
         <div ref={bottomRef} />

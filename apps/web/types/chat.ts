@@ -16,12 +16,20 @@ export type ProposedEdit = {
   status: "pending" | "approved" | "rejected";
 };
 
+export type ProposedDelete = {
+  id: string;
+  docId: string;
+  docTitle: string;
+  status: "pending" | "approved" | "rejected";
+};
+
 export type ChatMessageData = {
   id: string;
   role: Role;
   content: string;
   citations: CitationRef[];
   proposedEdit?: ProposedEdit;
+  proposedDelete?: ProposedDelete;
   timestamp: number;
 };
 
@@ -45,5 +53,6 @@ export type SSEEvent =
   | { type: "TextChunk"; content: string }
   | { type: "CitationFound"; docId: string; paragraphId: string; label: number; title: string }
   | { type: "ProposedEditEmitted"; editId: string; docId: string; paragraphId: string; original: string; proposed: string }
+  | { type: "ProposedDeleteEmitted"; editId: string; docId: string; docTitle: string }
   | { type: "Done" }
   | { type: "Error"; message: string };

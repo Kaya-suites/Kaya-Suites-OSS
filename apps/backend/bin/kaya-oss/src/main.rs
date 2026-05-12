@@ -626,7 +626,28 @@ async fn build_edit_sse(state: &AppState, edit: &ProposedEdit) -> Option<Value> 
         ProposedEditKind::UpdateContent { document_id, new_content } => {
             (Some(*document_id), "p0".to_string(), String::new(), new_content.clone())
         }
-        ProposedEditKind::DeleteDocument { .. } => return None,
+        ProposedEditKind::DeleteDocument { document_id } => {
+            let doc_title = state
+                .storage
+                .get_document(*document_id)
+                .await
+                .map(|d| d.title)
+                .unwrap_or_default();
+            let stored = StoredEdit {
+                edit: edit.clone(),
+                doc_title: doc_title.clone(),
+                first_paragraph_id: String::new(),
+                original_paragraph: String::new(),
+                proposed_paragraph: String::new(),
+            };
+            state.pending_edits.lock().await.insert(edit.id, stored);
+            return Some(json!({
+                "type": "ProposedDeleteEmitted",
+                "editId": edit.id,
+                "docId": document_id,
+                "docTitle": doc_title,
+            }));
+        }
     };
 
     let doc_title = if let Some(id) = doc_id {
