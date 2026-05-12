@@ -240,6 +240,27 @@ async fn export_document_pdf(
         .unwrap())
 }
 
+// ── Route: DELETE /documents/:id ─────────────────────────────────────────────
+
+async fn delete_document(
+    State(state): State<S>,
+    AxumPath(id): AxumPath<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    state
+        .storage
+        .get_document(id)
+        .await
+        .map_err(|_| ApiError::not_found(format!("document {id}")))?;
+
+    state
+        .storage
+        .delete_document(id)
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 // ── Route: POST /sessions/:id/chat  (SSE) ────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -698,14 +719,14 @@ async fn main() {
     // ── CORS ──────────────────────────────────────────────────────────────────
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::any())
-        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
         .allow_headers(AllowHeaders::any());
 
     // ── Router ────────────────────────────────────────────────────────────────
     let app = oa_router
         .route("/sessions", get(list_sessions).post(create_session))
         .route("/documents", get(list_documents))
-        .route("/documents/{id}", get(get_document))
+        .route("/documents/{id}", get(get_document).delete(delete_document))
         .route("/documents/{id}/export.pdf", get(export_document_pdf))
         .route("/sessions/{id}/chat", post(chat_stream))
         .route("/edits/{id}/approve", post(approve_edit))
