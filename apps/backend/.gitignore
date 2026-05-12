@@ -1,1 +1,5 @@
 /target
+kaya.db
+kaya.db-shm
+kaya.db-wal
+
