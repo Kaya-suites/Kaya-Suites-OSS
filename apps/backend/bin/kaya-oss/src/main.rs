@@ -240,6 +240,54 @@ async fn export_document_pdf(
         .unwrap())
 }
 
+// ── Route: GET /sessions/:id/messages ────────────────────────────────────────
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MessageRecord {
+    id: String,
+    role: String,
+    content: String,
+    citations: Value,
+    created_at: i64,
+}
+
+async fn get_session_messages(
+    State(state): State<S>,
+    AxumPath(session_id): AxumPath<Uuid>,
+) -> Result<Json<Vec<MessageRecord>>, ApiError> {
+    let rows = sqlx::query(
+        "SELECT id, role, content, citations, created_at FROM messages \
+         WHERE session_id = ? ORDER BY created_at ASC",
+    )
+    .bind(session_id.to_string())
+    .fetch_all(&state.sessions_pool)
+    .await
+    .map_err(|e| ApiError::internal(e.to_string()))?;
+
+    let msgs = rows
+        .into_iter()
+        .map(|row| -> Result<MessageRecord, ApiError> {
+            let citations_str: String = row
+                .try_get("citations")
+                .map_err(|e| ApiError::internal(e.to_string()))?;
+            let citations: Value =
+                serde_json::from_str(&citations_str).unwrap_or(json!([]));
+            Ok(MessageRecord {
+                id: row.try_get("id").map_err(|e| ApiError::internal(e.to_string()))?,
+                role: row.try_get("role").map_err(|e| ApiError::internal(e.to_string()))?,
+                content: row.try_get("content").map_err(|e| ApiError::internal(e.to_string()))?,
+                citations,
+                created_at: row
+                    .try_get("created_at")
+                    .map_err(|e| ApiError::internal(e.to_string()))?,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(Json(msgs))
+}
+
 // ── Route: DELETE /documents/:id ─────────────────────────────────────────────
 
 async fn delete_document(
@@ -291,6 +339,18 @@ async fn chat_stream(
     .execute(&state.sessions_pool)
     .await;
 
+    // Persist the user message
+    let _ = sqlx::query(
+        "INSERT INTO messages (id, session_id, role, content, citations, created_at) \
+         VALUES (?, ?, 'user', ?, '[]', ?)",
+    )
+    .bind(Uuid::new_v4().to_string())
+    .bind(session_id.to_string())
+    .bind(&body.message)
+    .bind(now)
+    .execute(&state.sessions_pool)
+    .await;
+
     let (tx, rx) = tokio::sync::mpsc::channel::<Bytes>(64);
     let message = body.message;
 
@@ -312,7 +372,7 @@ async fn chat_stream(
 async fn run_agent_stream(
     state: S,
     router: Arc<ModelRouter>,
-    _session_id: Uuid,
+    session_id: Uuid,
     message: String,
     tx: tokio::sync::mpsc::Sender<Bytes>,
 ) {
@@ -328,6 +388,10 @@ async fn run_agent_stream(
 
     // Cache doc titles seen in tool results to annotate citations cheaply.
     let mut doc_title_cache: HashMap<Uuid, String> = HashMap::new();
+
+    // Accumulate the full assistant reply for persistence.
+    let mut assistant_text = String::new();
+    let mut assistant_citations: Vec<Value> = Vec::new();
 
     macro_rules! send {
         ($data:expr) => {{
@@ -400,6 +464,13 @@ async fn run_agent_stream(
                             .unwrap_or_default()
                     };
 
+                    assistant_citations.push(json!({
+                        "label": label,
+                        "docId": doc_id_str,
+                        "paragraphId": para_id,
+                        "title": title,
+                    }));
+
                     let evt = json!({
                         "type": "CitationFound",
                         "docId": doc_id_str,
@@ -420,10 +491,28 @@ async fn run_agent_stream(
                     send!(evt);
                     tokio::time::sleep(tokio::time::Duration::from_millis(15)).await;
                 }
+
+                assistant_text = clean_text;
             }
 
             Ok(_) => {} // ThinkingChunk, ToolCall — not surfaced to UI
         }
+    }
+
+    // Persist the completed assistant message.
+    if !assistant_text.is_empty() {
+        let citations_json = serde_json::to_string(&assistant_citations).unwrap_or_else(|_| "[]".to_string());
+        let _ = sqlx::query(
+            "INSERT INTO messages (id, session_id, role, content, citations, created_at) \
+             VALUES (?, ?, 'assistant', ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(session_id.to_string())
+        .bind(&assistant_text)
+        .bind(citations_json)
+        .bind(Utc::now().timestamp_millis())
+        .execute(&state.sessions_pool)
+        .await;
     }
 
     send!(json!({"type": "Done"}));
@@ -708,6 +797,20 @@ async fn main() {
     .await
     .expect("create sessions table");
 
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS messages (
+            id         TEXT    PRIMARY KEY,
+            session_id TEXT    NOT NULL,
+            role       TEXT    NOT NULL,
+            content    TEXT    NOT NULL,
+            citations  TEXT    NOT NULL DEFAULT '[]',
+            created_at INTEGER NOT NULL
+        )",
+    )
+    .execute(&sessions_pool)
+    .await
+    .expect("create messages table");
+
     // ── App state ─────────────────────────────────────────────────────────────
     let state: S = Arc::new(AppState {
         storage,
@@ -728,6 +831,7 @@ async fn main() {
         .route("/documents", get(list_documents))
         .route("/documents/{id}", get(get_document).delete(delete_document))
         .route("/documents/{id}/export.pdf", get(export_document_pdf))
+        .route("/sessions/{id}/messages", get(get_session_messages))
         .route("/sessions/{id}/chat", post(chat_stream))
         .route("/edits/{id}/approve", post(approve_edit))
         .with_state(state)

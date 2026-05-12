@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type {
   ChatMessageData,
   CitationRef,
+  Role,
   SSEEvent,
 } from "@/types/chat";
 import { ChatMessage } from "./ChatMessage";
@@ -47,10 +48,48 @@ export function ChatPanel({ sessionId, onCitationClick, onDocumentUpdated }: Pro
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Reset on session change
+  // Load message history when session changes
   useEffect(() => {
-    setMessages([WELCOME]);
     setStreamingId(null);
+    if (!sessionId) {
+      setMessages([WELCOME]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/sessions/${sessionId}/messages`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then(
+        (
+          data: Array<{
+            id: string;
+            role: string;
+            content: string;
+            citations: CitationRef[];
+            createdAt: number;
+          }>,
+        ) => {
+          if (cancelled) return;
+          if (data.length === 0) {
+            setMessages([WELCOME]);
+          } else {
+            setMessages(
+              data.map((m) => ({
+                id: m.id,
+                role: m.role as Role,
+                content: m.content,
+                citations: m.citations ?? [],
+                timestamp: m.createdAt,
+              })),
+            );
+          }
+        },
+      )
+      .catch(() => {
+        if (!cancelled) setMessages([WELCOME]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [sessionId]);
 
   async function sendMessage(content: string) {
