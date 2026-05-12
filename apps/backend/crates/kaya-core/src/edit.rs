@@ -13,15 +13,16 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::auth::UserSession;
+use crate::diff::ParagraphDiff;
 use crate::error::KayaError;
-use crate::storage::StorageAdapter;
+use crate::storage::{Document, StorageAdapter};
 
 // ── Proposed edit ────────────────────────────────────────────────────────────
 
 /// The kind of change being proposed.
 #[derive(Debug, Clone)]
 pub enum ProposedEditKind {
-    /// Replace the full content of a document.
+    /// Replace the full body of an existing document.
     UpdateContent {
         document_id: Uuid,
         new_content: String,
@@ -29,6 +30,20 @@ pub enum ProposedEditKind {
     /// Delete a document entirely.
     DeleteDocument {
         document_id: Uuid,
+    },
+    /// Create a brand-new document. Requires approval before it is persisted.
+    Create {
+        title: String,
+        body: String,
+    },
+    /// Modify an existing document at the paragraph level.
+    ///
+    /// `diff` is for display (UI diff renderer). `new_body` is the
+    /// authoritative replacement body applied by [`commit_edit`].
+    Modify {
+        document_id: Uuid,
+        diff: ParagraphDiff,
+        new_body: String,
     },
 }
 
@@ -112,6 +127,25 @@ pub async fn commit_edit(
         }
         ProposedEditKind::DeleteDocument { document_id } => {
             storage.delete_document(document_id).await?;
+        }
+        ProposedEditKind::Create { title, body } => {
+            let doc = Document {
+                id: Uuid::new_v4(),
+                title,
+                owner: None,
+                last_reviewed: None,
+                tags: vec![],
+                related_docs: vec![],
+                body,
+                path: None,
+            };
+            storage.save_document(&doc).await?;
+        }
+        ProposedEditKind::Modify { document_id, new_body, .. } => {
+            // `diff` is for display only; apply the full new_body directly.
+            let mut doc = storage.get_document(document_id).await?;
+            doc.body = new_body;
+            storage.save_document(&doc).await?;
         }
     }
 

@@ -100,6 +100,7 @@ impl LlmProvider for MockProvider {
     async fn tool_call(&self, request: ToolCallRequest) -> Result<ToolCallResponse, KayaError> {
         Ok(ToolCallResponse {
             result: None,
+            content: Some(self.completion_text.clone()),
             usage: TokenUsage {
                 input_tokens: self.input_tokens,
                 output_tokens: self.output_tokens,
