@@ -2,12 +2,27 @@
 //!
 //! # Architecture
 //! - Files on disk (`.md` with YAML frontmatter) are the **source of truth**.
-//! - SQLite is a **fast index** used for listing and search; it is never the
-//!   primary store.
+//! - SQLite is a **fast index** used for listing, FTS5 BM25 search, and vector
+//!   search; it is never the primary store for document bodies.
 //! - `get_document` always reads from disk; the index is only consulted to
 //!   resolve a UUID → file path mapping.
 //! - On startup a background task reconciles the index with the current state
 //!   of disk so that manual edits are detected (FR-5).
+//!
+//! # Vector search implementation note
+//! Embeddings are stored as packed-f32 BLOBs (little-endian).  At query time
+//! all vectors are loaded and cosine similarity is computed in Rust.  This is
+//! sufficient for a 1,000-document corpus (~8,000 chunks, ~47 MB).
+//!
+//! **Production swap**: replace the `chunk_embeddings` regular table with a
+//! `sqlite-vec` `vec0` virtual table and change `search_embeddings` to:
+//! ```sql
+//! SELECT paragraph_id, distance
+//! FROM vec_chunks
+//! WHERE embedding MATCH ?
+//! ORDER BY distance
+//! LIMIT ?
+//! ```
 
 use std::{
     path::{Path, PathBuf},
@@ -23,7 +38,7 @@ use sqlx::{
 use tokio::sync::watch;
 use uuid::Uuid;
 
-use kaya_core::storage::{Document, Embedding, StorageAdapter, StorageError};
+use kaya_core::storage::{Chunk, ChunkHit, Document, Embedding, StorageAdapter, StorageError};
 
 use crate::document::{parse_document, sha256_hex, to_markdown};
 
@@ -42,7 +57,7 @@ struct Inner {
 /// background reconciliation task runs.
 pub struct SqliteAdapter {
     inner: Arc<Inner>,
-    /// Receiver that becomes `true` once the first reconciliation pass finishes.
+    /// Becomes `true` once the first reconciliation pass finishes.
     reconciled_rx: watch::Receiver<bool>,
 }
 
@@ -70,10 +85,7 @@ impl SqliteAdapter {
 
         run_migrations(&pool).await?;
 
-        let inner = Arc::new(Inner {
-            pool,
-            content_dir,
-        });
+        let inner = Arc::new(Inner { pool, content_dir });
 
         let (tx, rx) = watch::channel(false);
         let inner_bg = Arc::clone(&inner);
@@ -81,23 +93,15 @@ impl SqliteAdapter {
             if let Err(e) = reconcile(&inner_bg).await {
                 eprintln!("[kaya-storage] reconciliation error: {e:#}");
             }
-            // Ignore send error — receiver may have been dropped in tests.
             let _ = tx.send(true);
         });
 
-        Ok(Self {
-            inner,
-            reconciled_rx: rx,
-        })
+        Ok(Self { inner, reconciled_rx: rx })
     }
 
     /// Block until the initial reconciliation pass has finished.
-    ///
-    /// Used in integration tests to assert post-reconciliation state.
     pub async fn wait_for_reconciliation(&self) {
         let mut rx = self.reconciled_rx.clone();
-        // `wait_for` checks the current value first, so this returns immediately
-        // if reconciliation already completed before we called this.
         rx.wait_for(|&done| done).await.unwrap();
     }
 }
@@ -106,17 +110,17 @@ impl SqliteAdapter {
 
 #[async_trait]
 impl StorageAdapter for SqliteAdapter {
+    // ── Documents ─────────────────────────────────────────────────────────────
+
     /// Read a document from disk. The index is consulted only to resolve the
     /// UUID → relative file path; the file itself is the authoritative source.
     async fn get_document(&self, id: Uuid) -> Result<Document, StorageError> {
         let id_str = id.to_string();
-        let row = sqlx::query(
-            "SELECT path, deleted_at FROM documents WHERE id = ?",
-        )
-        .bind(&id_str)
-        .fetch_optional(&self.inner.pool)
-        .await
-        .map_err(box_err)?;
+        let row = sqlx::query("SELECT path, deleted_at FROM documents WHERE id = ?")
+            .bind(&id_str)
+            .fetch_optional(&self.inner.pool)
+            .await
+            .map_err(box_err)?;
 
         let row = row.ok_or(StorageError::NotFound(id))?;
 
@@ -142,9 +146,6 @@ impl StorageAdapter for SqliteAdapter {
     }
 
     /// Write a document to disk and update the index.
-    ///
-    /// If `doc.path` is `None` the adapter assigns `<uuid>.md` as the relative
-    /// path. The UUID is stable — renaming the file later does not change it.
     async fn save_document(&self, doc: &Document) -> Result<(), StorageError> {
         let rel_path = doc
             .path
@@ -167,9 +168,8 @@ impl StorageAdapter for SqliteAdapter {
         Ok(())
     }
 
-    /// Remove a document from disk and mark it deleted in the index.
-    ///
-    /// No-op if the document does not exist.
+    /// Remove a document from disk, mark it deleted in the index, and delete
+    /// all its chunks and embeddings.
     async fn delete_document(&self, id: Uuid) -> Result<(), StorageError> {
         let id_str = id.to_string();
         let row = sqlx::query(
@@ -183,33 +183,36 @@ impl StorageAdapter for SqliteAdapter {
         if let Some(row) = row {
             let path: String = row.try_get("path").map_err(box_err)?;
             let abs_path = self.inner.content_dir.join(&path);
-            // Best-effort: ignore NotFound; the index will be marked deleted.
             let _ = tokio::fs::remove_file(&abs_path).await;
 
             let now = chrono::Utc::now().to_rfc3339();
-            sqlx::query(
-                "UPDATE documents SET deleted_at = ? WHERE id = ?",
-            )
-            .bind(&now)
-            .bind(&id_str)
-            .execute(&self.inner.pool)
-            .await
-            .map_err(box_err)?;
+            sqlx::query("UPDATE documents SET deleted_at = ? WHERE id = ?")
+                .bind(&now)
+                .bind(&id_str)
+                .execute(&self.inner.pool)
+                .await
+                .map_err(box_err)?;
+
+            // Remove all chunks and vector embeddings for this document.
+            self.delete_chunks_for_document(id).await?;
+            sqlx::query("DELETE FROM chunk_embeddings WHERE document_id = ?")
+                .bind(&id_str)
+                .execute(&self.inner.pool)
+                .await
+                .map_err(box_err)?;
         }
 
         Ok(())
     }
 
     /// Return all non-deleted documents by reading each file from disk.
-    ///
-    /// Files that have disappeared from disk since the last reconciliation are
-    /// silently skipped; the next reconciliation will mark them deleted.
     async fn list_documents(&self) -> Result<Vec<Document>, StorageError> {
-        let rows =
-            sqlx::query("SELECT id, path FROM documents WHERE deleted_at IS NULL ORDER BY updated_at DESC")
-                .fetch_all(&self.inner.pool)
-                .await
-                .map_err(box_err)?;
+        let rows = sqlx::query(
+            "SELECT id, path FROM documents WHERE deleted_at IS NULL ORDER BY updated_at DESC",
+        )
+        .fetch_all(&self.inner.pool)
+        .await
+        .map_err(box_err)?;
 
         let mut docs = Vec::with_capacity(rows.len());
         for row in rows {
@@ -222,33 +225,243 @@ impl StorageAdapter for SqliteAdapter {
                     doc.path = Some(PathBuf::from(rel_path));
                     docs.push(doc);
                 }
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    // File gone between reconciliation passes; skip.
-                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                 Err(e) => return Err(box_err(e)),
             }
         }
         Ok(docs)
     }
 
-    /// Not yet implemented (next prompt). Always returns an empty list.
-    async fn search_embeddings(
-        &self,
-        _query: &[f32],
-        _limit: usize,
-    ) -> Result<Vec<Embedding>, StorageError> {
-        Ok(vec![])
+    // ── Chunks ────────────────────────────────────────────────────────────────
+
+    /// Store a chunk in the metadata table and the FTS5 full-text index.
+    async fn save_chunk(&self, chunk: &Chunk) -> Result<(), StorageError> {
+        let doc_id = chunk.document_id.to_string();
+        let content_hash = sha256_hex(chunk.content.as_bytes());
+
+        sqlx::query(
+            "INSERT OR REPLACE INTO chunks
+             (document_id, paragraph_id, ordinal, content, content_hash)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(&doc_id)
+        .bind(&chunk.paragraph_id)
+        .bind(chunk.ordinal as i64)
+        .bind(&chunk.content)
+        .bind(&content_hash)
+        .execute(&self.inner.pool)
+        .await
+        .map_err(box_err)?;
+
+        // FTS5 does not support UPSERT; we rely on delete_chunks_for_document
+        // being called before save_chunk when re-indexing.
+        sqlx::query(
+            "INSERT INTO chunk_fts (content, document_id, paragraph_id, ordinal)
+             VALUES (?, ?, ?, ?)",
+        )
+        .bind(&chunk.content)
+        .bind(&doc_id)
+        .bind(&chunk.paragraph_id)
+        .bind(chunk.ordinal as i64)
+        .execute(&self.inner.pool)
+        .await
+        .map_err(box_err)?;
+
+        Ok(())
     }
 
-    /// Not yet implemented (next prompt). No-op.
-    async fn save_embeddings(&self, _embedding: &Embedding) -> Result<(), StorageError> {
+    /// Delete all chunks (metadata + FTS5 rows) for a document.
+    async fn delete_chunks_for_document(&self, document_id: Uuid) -> Result<(), StorageError> {
+        let doc_id = document_id.to_string();
+
+        sqlx::query("DELETE FROM chunks WHERE document_id = ?")
+            .bind(&doc_id)
+            .execute(&self.inner.pool)
+            .await
+            .map_err(box_err)?;
+
+        // FTS5 supports DELETE with a WHERE on UNINDEXED columns via full scan.
+        sqlx::query("DELETE FROM chunk_fts WHERE document_id = ?")
+            .bind(&doc_id)
+            .execute(&self.inner.pool)
+            .await
+            .map_err(box_err)?;
+
         Ok(())
+    }
+
+    /// Return `(paragraph_id, content_hash)` pairs for all chunks of a document.
+    async fn get_chunk_hashes(
+        &self,
+        document_id: Uuid,
+    ) -> Result<Vec<(String, String)>, StorageError> {
+        let doc_id = document_id.to_string();
+        let rows = sqlx::query(
+            "SELECT paragraph_id, content_hash FROM chunks WHERE document_id = ?",
+        )
+        .bind(&doc_id)
+        .fetch_all(&self.inner.pool)
+        .await
+        .map_err(box_err)?;
+
+        rows.into_iter()
+            .map(|row| {
+                let para_id: String = row.try_get("paragraph_id").map_err(box_err)?;
+                let hash: String = row.try_get("content_hash").map_err(box_err)?;
+                Ok((para_id, hash))
+            })
+            .collect()
+    }
+
+    /// BM25 full-text search via SQLite FTS5. Returns chunks ranked by relevance.
+    async fn search_text(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<ChunkHit>, StorageError> {
+        if query.trim().is_empty() {
+            return Ok(vec![]);
+        }
+
+        // FTS5 rank is a negative BM25 score; ORDER BY rank ASC = most relevant first.
+        let rows = sqlx::query(
+            "SELECT document_id, paragraph_id, content, ordinal
+             FROM chunk_fts
+             WHERE chunk_fts MATCH ?
+             ORDER BY rank
+             LIMIT ?",
+        )
+        .bind(query)
+        .bind(limit as i64)
+        .fetch_all(&self.inner.pool)
+        .await
+        .map_err(box_err)?;
+
+        rows.into_iter()
+            .map(|row| {
+                let doc_id_str: String = row.try_get("document_id").map_err(box_err)?;
+                let doc_id = Uuid::parse_str(&doc_id_str).map_err(box_err)?;
+                let para_id: String = row.try_get("paragraph_id").map_err(box_err)?;
+                let content: String = row.try_get("content").map_err(box_err)?;
+                let ordinal: i64 = row.try_get("ordinal").map_err(box_err)?;
+                Ok(ChunkHit {
+                    document_id: doc_id,
+                    paragraph_id: para_id,
+                    content,
+                    ordinal: ordinal as u32,
+                })
+            })
+            .collect()
+    }
+
+    // ── Embeddings ────────────────────────────────────────────────────────────
+
+    /// Persist a vector embedding as a packed-f32 BLOB.
+    async fn save_embeddings(&self, embedding: &Embedding) -> Result<(), StorageError> {
+        let doc_id = embedding.document_id.to_string();
+        let blob = encode_f32(&embedding.vector);
+
+        sqlx::query(
+            "INSERT OR REPLACE INTO chunk_embeddings (document_id, paragraph_id, vector)
+             VALUES (?, ?, ?)",
+        )
+        .bind(&doc_id)
+        .bind(&embedding.paragraph_id)
+        .bind(&blob)
+        .execute(&self.inner.pool)
+        .await
+        .map_err(box_err)?;
+
+        Ok(())
+    }
+
+    /// Delete embeddings for specific (document_id, paragraph_id) pairs.
+    async fn delete_embeddings_for_paragraphs(
+        &self,
+        document_id: Uuid,
+        paragraph_ids: &[String],
+    ) -> Result<(), StorageError> {
+        if paragraph_ids.is_empty() {
+            return Ok(());
+        }
+        let doc_id = document_id.to_string();
+        for para_id in paragraph_ids {
+            sqlx::query(
+                "DELETE FROM chunk_embeddings WHERE document_id = ? AND paragraph_id = ?",
+            )
+            .bind(&doc_id)
+            .bind(para_id)
+            .execute(&self.inner.pool)
+            .await
+            .map_err(box_err)?;
+        }
+        Ok(())
+    }
+
+    /// Cosine-similarity vector search over all stored embeddings.
+    ///
+    /// All vectors are loaded and similarity is computed in Rust.  For ≤10,000
+    /// chunks this is sub-millisecond; swap to sqlite-vec for larger corpora.
+    async fn search_embeddings(
+        &self,
+        query: &[f32],
+        limit: usize,
+    ) -> Result<Vec<ChunkHit>, StorageError> {
+        if query.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Load all embeddings joined with chunk content.
+        let rows = sqlx::query(
+            "SELECT ce.document_id, ce.paragraph_id, ce.vector,
+                    c.content, c.ordinal
+             FROM chunk_embeddings ce
+             JOIN chunks c
+               ON c.document_id = ce.document_id
+              AND c.paragraph_id = ce.paragraph_id",
+        )
+        .fetch_all(&self.inner.pool)
+        .await
+        .map_err(box_err)?;
+
+        // Compute cosine similarities and sort.
+        let mut scored: Vec<(f32, ChunkHit)> = rows
+            .into_iter()
+            .filter_map(|row| {
+                let doc_id_str: String = row.try_get("document_id").ok()?;
+                let doc_id = Uuid::parse_str(&doc_id_str).ok()?;
+                let para_id: String = row.try_get("paragraph_id").ok()?;
+                let blob: Vec<u8> = row.try_get("vector").ok()?;
+                let content: String = row.try_get("content").ok()?;
+                let ordinal: i64 = row.try_get("ordinal").ok()?;
+
+                let vec = decode_f32(&blob);
+                let sim = cosine_similarity(query, &vec);
+
+                Some((
+                    sim,
+                    ChunkHit {
+                        document_id: doc_id,
+                        paragraph_id: para_id,
+                        content,
+                        ordinal: ordinal as u32,
+                    },
+                ))
+            })
+            .collect();
+
+        scored.sort_unstable_by(|a, b| {
+            b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        Ok(scored.into_iter().take(limit).map(|(_, hit)| hit).collect())
     }
 }
 
 // ── Migrations ────────────────────────────────────────────────────────────────
 
 async fn run_migrations(pool: &SqlitePool) -> Result<(), StorageError> {
+    // Document index (FR-2, FR-5)
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS documents (
             id               TEXT PRIMARY KEY,
@@ -263,22 +476,59 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), StorageError> {
     .execute(pool)
     .await
     .map_err(box_err)?;
+
+    // Chunk metadata + content hashes (used by re-embedding efficiency check, FR-6)
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS chunks (
+            document_id  TEXT NOT NULL,
+            paragraph_id TEXT NOT NULL,
+            ordinal      INTEGER NOT NULL,
+            content      TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            PRIMARY KEY (document_id, paragraph_id)
+        )",
+    )
+    .execute(pool)
+    .await
+    .map_err(box_err)?;
+
+    // FTS5 full-text index for BM25 retrieval (FR-7)
+    // tokenize='unicode61' is the standard Unicode tokenizer without stemming.
+    sqlx::query(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(
+            content,
+            document_id  UNINDEXED,
+            paragraph_id UNINDEXED,
+            ordinal      UNINDEXED,
+            tokenize     = 'unicode61'
+        )",
+    )
+    .execute(pool)
+    .await
+    .map_err(box_err)?;
+
+    // Vector embeddings stored as packed-f32 BLOBs (little-endian).
+    // TODO: replace with sqlite-vec vec0 virtual table for ANN at scale.
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS chunk_embeddings (
+            document_id  TEXT NOT NULL,
+            paragraph_id TEXT NOT NULL,
+            vector       BLOB NOT NULL,
+            PRIMARY KEY (document_id, paragraph_id)
+        )",
+    )
+    .execute(pool)
+    .await
+    .map_err(box_err)?;
+
     Ok(())
 }
 
 // ── Reconciliation ─────────────────────────────────────────────────────────────
 
-/// Scan the content directory and synchronise the index.
-///
-/// - New or changed files are (re)indexed.
-/// - Files that disappeared from disk are marked deleted in the index.
-///
-/// Runs inside a background `tokio::spawn` task; errors are logged but do not
-/// propagate to the caller.
 async fn reconcile(inner: &Arc<Inner>) -> anyhow::Result<()> {
     let content_dir = inner.content_dir.clone();
 
-    // Collect .md paths synchronously on a blocking thread.
     let rel_paths: Vec<PathBuf> = tokio::task::spawn_blocking(move || {
         let mut acc = Vec::new();
         for entry in walkdir::WalkDir::new(&content_dir)
@@ -330,11 +580,9 @@ async fn reconcile(inner: &Arc<Inner>) -> anyhow::Result<()> {
         }
     }
 
-    // Mark deleted any non-deleted index entries whose files are gone.
-    let rows =
-        sqlx::query("SELECT id, path FROM documents WHERE deleted_at IS NULL")
-            .fetch_all(&inner.pool)
-            .await?;
+    let rows = sqlx::query("SELECT id, path FROM documents WHERE deleted_at IS NULL")
+        .fetch_all(&inner.pool)
+        .await?;
 
     let now = chrono::Utc::now().to_rfc3339();
     for row in rows {
@@ -352,7 +600,6 @@ async fn reconcile(inner: &Arc<Inner>) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Parse a file, optionally write back an assigned UUID, then upsert the index.
 async fn process_file(
     inner: &Arc<Inner>,
     abs_path: &Path,
@@ -369,7 +616,6 @@ async fn process_file(
     };
     doc.path = Some(PathBuf::from(rel_str));
 
-    // FR-2: if the file had no id, write it back so the UUID is stable.
     if id_generated {
         match to_markdown(&doc) {
             Ok(updated) => {
@@ -387,11 +633,6 @@ async fn process_file(
 
 // ── Index helpers ─────────────────────────────────────────────────────────────
 
-/// Insert or update the index row for a document.
-///
-/// If another row claims the same `path` but a different `id` (e.g. the file
-/// was replaced), that stale row is removed first so the UNIQUE constraint
-/// on `path` is not violated.
 async fn upsert_index(
     pool: &SqlitePool,
     doc: &Document,
@@ -400,7 +641,6 @@ async fn upsert_index(
 ) -> Result<(), StorageError> {
     let id_str = doc.id.to_string();
 
-    // Remove any stale entry that owns this path with a different id.
     sqlx::query("DELETE FROM documents WHERE path = ? AND id != ?")
         .bind(rel_path)
         .bind(&id_str)
@@ -433,6 +673,31 @@ async fn upsert_index(
     .map_err(box_err)?;
 
     Ok(())
+}
+
+// ── Vector helpers ────────────────────────────────────────────────────────────
+
+/// Pack a `Vec<f32>` as a little-endian byte array.
+fn encode_f32(v: &[f32]) -> Vec<u8> {
+    v.iter().flat_map(|f| f.to_le_bytes()).collect()
+}
+
+/// Unpack a little-endian byte array into `Vec<f32>`.
+fn decode_f32(blob: &[u8]) -> Vec<f32> {
+    blob.chunks_exact(4)
+        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect()
+}
+
+/// Cosine similarity between two equal-length vectors.  Returns 0 for zero vectors.
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    if a.len() != b.len() {
+        return 0.0;
+    }
+    let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
+    let na: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let nb: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if na == 0.0 || nb == 0.0 { 0.0 } else { dot / (na * nb) }
 }
 
 // ── Error helpers ─────────────────────────────────────────────────────────────
