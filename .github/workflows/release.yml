@@ -1,0 +1,37 @@
+name: Release
+
+# Triggered on version tags (e.g. v0.1.0).
+# Strips BSL code before pushing to the public mirror.
+#
+# PLACEHOLDER — uncomment and complete when ready to ship.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # release:
+  #   name: Build and publish OSS mirror
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     - name: Strip EE code
+  #       run: bash scripts/strip-ee.sh
+  #
+  #     - name: Build OSS binary
+  #       working-directory: apps/backend
+  #       run: cargo build --release --bin kaya-oss
+  #
+  #     - name: Push to public mirror
+  #       # Configure GH_MIRROR_TOKEN and PUBLIC_MIRROR_REPO in repo secrets.
+  #       run: |
+  #         git remote add mirror https://x-token:${{ secrets.GH_MIRROR_TOKEN }}@github.com/${{ secrets.PUBLIC_MIRROR_REPO }}.git
+  #         git push mirror HEAD:main --force
+
+  placeholder:
+    name: Release placeholder (no-op)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Release workflow not yet configured"

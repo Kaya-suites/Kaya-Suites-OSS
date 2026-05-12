@@ -1,0 +1,15 @@
+[package]
+name    = "kaya-postgres-storage"
+version = "0.1.0"
+edition = "2024"
+license = "BUSL-1.1"
+description = "Postgres + pgvector storage adapter for Kaya Suites cloud (BSL 1.1)"
+
+[dependencies]
+kaya-core   = { path = "../../kaya-core" }
+async-trait = { workspace = true }
+thiserror   = { workspace = true }
+uuid        = { workspace = true }
+
+# TODO: add sqlx with postgres + pgvector when implementing PostgresAdapter
+# sqlx = { version = "0.8", features = ["postgres", "runtime-tokio", "uuid"] }

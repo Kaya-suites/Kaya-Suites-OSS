@@ -1,0 +1,19 @@
+[package]
+name    = "kaya-oss"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "OSS self-hosted binary for Kaya Suites (Apache 2.0)"
+
+# IMPORTANT: only Apache-licensed crates may appear here.
+# BSL crates (anything under crates/ee/) must never be listed as dependencies.
+[dependencies]
+kaya-core   = { path = "../../crates/kaya-core" }
+kaya-storage = { path = "../../crates/kaya-storage" }
+
+axum        = { workspace = true }
+tokio       = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+utoipa      = { workspace = true }
+utoipa-axum = { workspace = true }
