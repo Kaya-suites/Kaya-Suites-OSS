@@ -1,8 +1,5 @@
-"use client";
-
-import "@/lib/api";
-import { ChatLayout } from "@/components/shared/ChatLayout";
+import { redirect } from "next/navigation";
 
 export default function HomePage() {
-  return <ChatLayout />;
+  redirect("/chat");
 }
