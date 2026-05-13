@@ -36,6 +36,7 @@ use kaya_core::{
     auth::UserSession,
     edit::commit_edit,
     model_router::ModelRouter,
+    retrieval::index_document_chunks,
 };
 use kaya_storage::SqliteAdapter;
 
@@ -324,13 +325,26 @@ async fn update_document(
         .await
         .map_err(|e| ApiError::internal(e.to_string()))?;
 
-    Ok(Json(DocumentResponse {
+    let response = Json(DocumentResponse {
         id: doc.id,
-        title: doc.title,
-        body: doc.body,
-        tags: doc.tags,
+        title: doc.title.clone(),
+        body: doc.body.clone(),
+        tags: doc.tags.clone(),
         last_reviewed: doc.last_reviewed.map(|dt| dt.to_string()),
-    }))
+    });
+
+    // Re-index chunks and embeddings in the background so the HTTP response
+    // is not blocked by embedding API latency.
+    if let Some(router) = state.router.clone() {
+        let storage = state.storage.clone();
+        tokio::spawn(async move {
+            if let Err(e) = index_document_chunks(&doc, &storage, &router).await {
+                eprintln!("[reindex] update_document {id}: {e}");
+            }
+        });
+    }
+
+    Ok(response)
 }
 
 // ── Route: DELETE /documents/:id ─────────────────────────────────────────────
@@ -611,9 +625,24 @@ async fn approve_edit(
     let session = UserSession { user_id: Uuid::nil() };
     let token = session.approve_edit(&edit);
 
-    commit_edit(edit, token, state.storage.clone())
+    let affected_doc_id = commit_edit(edit, token, state.storage.clone())
         .await
         .map_err(|e| ApiError::internal(e.to_string()))?;
+
+    // Re-index the affected document in the background.
+    if let (Some(doc_id), Some(router)) = (affected_doc_id, state.router.clone()) {
+        let storage = state.storage.clone();
+        tokio::spawn(async move {
+            match storage.get_document(doc_id).await {
+                Ok(doc) => {
+                    if let Err(e) = index_document_chunks(&doc, &storage, &router).await {
+                        eprintln!("[reindex] approve_edit {doc_id}: {e}");
+                    }
+                }
+                Err(e) => eprintln!("[reindex] approve_edit get_document {doc_id}: {e}"),
+            }
+        });
+    }
 
     Ok(Json(json!({"ok": true})))
 }

@@ -106,6 +106,9 @@ impl UserSession {
 /// Because [`ApprovalToken`] cannot be constructed outside this crate,
 /// the compiler enforces that no edit reaches storage without prior approval.
 ///
+/// Returns the UUID of the document that was created or modified, so the caller
+/// can trigger a re-index. Returns `None` for deletions (nothing to re-index).
+///
 /// # Errors
 /// Propagates [`StorageError`](crate::storage::StorageError) wrapped in
 /// [`KayaError::Storage`].
@@ -113,7 +116,7 @@ pub async fn commit_edit(
     edit: ProposedEdit,
     token: ApprovalToken,
     storage: Arc<dyn StorageAdapter>,
-) -> Result<(), KayaError> {
+) -> Result<Option<Uuid>, KayaError> {
     debug_assert_eq!(
         token.edit_id, edit.id,
         "ApprovalToken edit_id does not match ProposedEdit id"
@@ -124,9 +127,11 @@ pub async fn commit_edit(
             let mut doc = storage.get_document(document_id).await?;
             doc.body = new_content;
             storage.save_document(&doc).await?;
+            Ok(Some(document_id))
         }
         ProposedEditKind::DeleteDocument { document_id } => {
             storage.delete_document(document_id).await?;
+            Ok(None)
         }
         ProposedEditKind::Create { title, body } => {
             let doc = Document {
@@ -139,15 +144,15 @@ pub async fn commit_edit(
                 body,
                 path: None,
             };
+            let doc_id = doc.id;
             storage.save_document(&doc).await?;
+            Ok(Some(doc_id))
         }
         ProposedEditKind::Modify { document_id, new_body, .. } => {
-            // `diff` is for display only; apply the full new_body directly.
             let mut doc = storage.get_document(document_id).await?;
             doc.body = new_body;
             storage.save_document(&doc).await?;
+            Ok(Some(document_id))
         }
     }
-
-    Ok(())
 }
