@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { ChatSession } from "@/types/chat";
 
 type Props = {
@@ -92,6 +93,20 @@ export function SessionRail({ sessions, currentSessionId, onSelect, onNew }: Pro
           </button>
         ))}
       </nav>
+
+      {/* Documents link */}
+      <div className="border-t border-stone-200 p-2">
+        <Link
+          href="/documents"
+          className="flex items-center gap-2 px-2 py-2 rounded text-xs text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+          </svg>
+          Documents
+        </Link>
+      </div>
     </aside>
   );
 }

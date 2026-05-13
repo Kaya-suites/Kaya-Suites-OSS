@@ -288,6 +288,51 @@ async fn get_session_messages(
     Ok(Json(msgs))
 }
 
+// ── Route: PUT /documents/:id ────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct UpdateDocumentBody {
+    title: Option<String>,
+    body: Option<String>,
+    tags: Option<Vec<String>>,
+}
+
+async fn update_document(
+    State(state): State<S>,
+    AxumPath(id): AxumPath<Uuid>,
+    Json(body): Json<UpdateDocumentBody>,
+) -> Result<Json<DocumentResponse>, ApiError> {
+    let mut doc = state
+        .storage
+        .get_document(id)
+        .await
+        .map_err(|_| ApiError::not_found(format!("document {id}")))?;
+
+    if let Some(title) = body.title {
+        doc.title = title;
+    }
+    if let Some(new_body) = body.body {
+        doc.body = new_body;
+    }
+    if let Some(tags) = body.tags {
+        doc.tags = tags;
+    }
+
+    state
+        .storage
+        .save_document(&doc)
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+
+    Ok(Json(DocumentResponse {
+        id: doc.id,
+        title: doc.title,
+        body: doc.body,
+        tags: doc.tags,
+        last_reviewed: doc.last_reviewed.map(|dt| dt.to_string()),
+    }))
+}
+
 // ── Route: DELETE /documents/:id ─────────────────────────────────────────────
 
 async fn delete_document(
@@ -860,14 +905,14 @@ async fn main() {
     // ── CORS ──────────────────────────────────────────────────────────────────
     let cors = CorsLayer::new()
         .allow_origin(AllowOrigin::any())
-        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
         .allow_headers(AllowHeaders::any());
 
     // ── Router ────────────────────────────────────────────────────────────────
     let app = oa_router
         .route("/sessions", get(list_sessions).post(create_session))
         .route("/documents", get(list_documents))
-        .route("/documents/{id}", get(get_document).delete(delete_document))
+        .route("/documents/{id}", get(get_document).put(update_document).delete(delete_document))
         .route("/documents/{id}/export.pdf", get(export_document_pdf))
         .route("/sessions/{id}/messages", get(get_session_messages))
         .route("/sessions/{id}/chat", post(chat_stream))
