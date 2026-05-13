@@ -1,8 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
+import type { MDXEditorMethods } from "@mdxeditor/editor";
 import type { KayaDocument } from "@/types/chat";
+
+const MDXEditorClient = dynamic(
+  () => import("./MDXEditorClient").then((m) => m.MDXEditorClient),
+  { ssr: false },
+);
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -15,6 +22,7 @@ export function DocumentEditor({ doc }: Props) {
   const [body, setBody] = useState(doc.body);
   const [tagsInput, setTagsInput] = useState(doc.tags.join(", "));
   const [status, setStatus] = useState<SaveStatus>("idle");
+  const editorRef = useRef<MDXEditorMethods>(null);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isDirty =
@@ -114,14 +122,14 @@ export function DocumentEditor({ doc }: Props) {
         />
       </div>
 
-      {/* Body editor */}
-      <textarea
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        className="flex-1 px-6 py-4 text-sm font-mono text-stone-800 bg-white resize-none border-none outline-none focus:ring-0 leading-relaxed"
-        placeholder="Start writing in Markdown…"
-        spellCheck={false}
-      />
+      {/* MDX Editor */}
+      <div className="flex-1 overflow-y-auto [&_.mdxeditor]:h-full [&_.mdxeditor-root-contenteditable]:min-h-full">
+        <MDXEditorClient
+          markdown={body}
+          onChange={setBody}
+          editorRef={editorRef}
+        />
+      </div>
     </div>
   );
 }
