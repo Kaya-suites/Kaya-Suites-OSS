@@ -1,13 +1,17 @@
 //! SQLite-backed `StorageAdapter` implementation for Kaya Suites OSS.
 //!
 //! # Architecture
-//! - Files on disk (`.md` with YAML frontmatter) are the **source of truth**.
-//! - SQLite is a **fast index** used for listing, FTS5 BM25 search, and vector
-//!   search; it is never the primary store for document bodies.
-//! - `get_document` always reads from disk; the index is only consulted to
-//!   resolve a UUID → file path mapping.
+//! - SQLite is the **source of truth** for document bodies (stored in the
+//!   `body` column of the `documents` table).
+//! - On first startup, existing `.md` files in `content_dir` are imported
+//!   into the DB by the reconciliation pass; after that, disk files are not
+//!   written or read for normal operations.
+//! - `get_document` and `list_documents` read exclusively from the DB.
+//!   A disk fall-back is retained only for rows that pre-date the `body`
+//!   column (i.e. `body IS NULL`) so that existing installations migrate
+//!   gracefully on the next reconciliation pass.
 //! - On startup a background task reconciles the index with the current state
-//!   of disk so that manual edits are detected (FR-5).
+//!   of disk so that manually added `.md` files are detected (FR-5).
 //!
 //! # Vector search implementation note
 //! Embeddings are stored as packed-f32 BLOBs (little-endian).  At query time
@@ -112,15 +116,17 @@ impl SqliteAdapter {
 impl StorageAdapter for SqliteAdapter {
     // ── Documents ─────────────────────────────────────────────────────────────
 
-    /// Read a document from disk. The index is consulted only to resolve the
-    /// UUID → relative file path; the file itself is the authoritative source.
+    /// Read a document from the database. Falls back to disk for rows that
+    /// pre-date the `body` column (i.e. `body IS NULL`).
     async fn get_document(&self, id: Uuid) -> Result<Document, StorageError> {
         let id_str = id.to_string();
-        let row = sqlx::query("SELECT path, deleted_at FROM documents WHERE id = ?")
-            .bind(&id_str)
-            .fetch_optional(&self.inner.pool)
-            .await
-            .map_err(box_err)?;
+        let row = sqlx::query(
+            "SELECT path, frontmatter_json, body, deleted_at FROM documents WHERE id = ?",
+        )
+        .bind(&id_str)
+        .fetch_optional(&self.inner.pool)
+        .await
+        .map_err(box_err)?;
 
         let row = row.ok_or(StorageError::NotFound(id))?;
 
@@ -130,8 +136,19 @@ impl StorageAdapter for SqliteAdapter {
         }
 
         let rel_path: String = row.try_get("path").map_err(box_err)?;
-        let abs_path = self.inner.content_dir.join(&rel_path);
+        let db_body: Option<String> = row.try_get("body").map_err(box_err)?;
 
+        if let Some(body) = db_body {
+            // Body is in the DB — reconstruct from stored JSON + body column.
+            let fm_json: String = row.try_get("frontmatter_json").map_err(box_err)?;
+            let mut doc: Document = serde_json::from_str(&fm_json).map_err(box_err)?;
+            doc.body = body;
+            doc.path = Some(PathBuf::from(rel_path));
+            return Ok(doc);
+        }
+
+        // Legacy fallback: read from disk for rows that don't have body in DB yet.
+        let abs_path = self.inner.content_dir.join(&rel_path);
         let raw = tokio::fs::read_to_string(&abs_path).await.map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
                 StorageError::NotFound(id)
@@ -139,31 +156,20 @@ impl StorageAdapter for SqliteAdapter {
                 box_err(e)
             }
         })?;
-
         let (mut doc, _) = parse_document(&raw).map_err(box_err)?;
         doc.path = Some(PathBuf::from(rel_path));
         Ok(doc)
     }
 
-    /// Write a document to disk and update the index.
+    /// Persist a document to the database. No disk write is performed.
     async fn save_document(&self, doc: &Document) -> Result<(), StorageError> {
         let rel_path = doc
             .path
             .clone()
             .unwrap_or_else(|| PathBuf::from(format!("{}.md", doc.id)));
 
-        let abs_path = self.inner.content_dir.join(&rel_path);
-        if let Some(parent) = abs_path.parent() {
-            tokio::fs::create_dir_all(parent).await.map_err(box_err)?;
-        }
-
-        let raw = to_markdown(doc).map_err(box_err)?;
-        tokio::fs::write(&abs_path, raw.as_bytes())
-            .await
-            .map_err(box_err)?;
-
-        let hash = sha256_hex(raw.as_bytes());
         let rel_str = rel_path.to_string_lossy().to_string();
+        let hash = sha256_hex(doc.body.as_bytes());
         upsert_index(&self.inner.pool, doc, &rel_str, &hash).await?;
         Ok(())
     }
@@ -205,10 +211,13 @@ impl StorageAdapter for SqliteAdapter {
         Ok(())
     }
 
-    /// Return all non-deleted documents by reading each file from disk.
+    /// Return all non-deleted documents from the database.
+    /// Falls back to disk for any row whose `body` column is still NULL
+    /// (pre-migration entries that haven't been reconciled yet).
     async fn list_documents(&self) -> Result<Vec<Document>, StorageError> {
         let rows = sqlx::query(
-            "SELECT id, path FROM documents WHERE deleted_at IS NULL ORDER BY updated_at DESC",
+            "SELECT path, frontmatter_json, body \
+             FROM documents WHERE deleted_at IS NULL ORDER BY updated_at DESC",
         )
         .fetch_all(&self.inner.pool)
         .await
@@ -217,16 +226,26 @@ impl StorageAdapter for SqliteAdapter {
         let mut docs = Vec::with_capacity(rows.len());
         for row in rows {
             let rel_path: String = row.try_get("path").map_err(box_err)?;
-            let abs_path = self.inner.content_dir.join(&rel_path);
+            let db_body: Option<String> = row.try_get("body").map_err(box_err)?;
 
-            match tokio::fs::read_to_string(&abs_path).await {
-                Ok(raw) => {
-                    let (mut doc, _) = parse_document(&raw).map_err(box_err)?;
-                    doc.path = Some(PathBuf::from(rel_path));
-                    docs.push(doc);
+            if let Some(body) = db_body {
+                let fm_json: String = row.try_get("frontmatter_json").map_err(box_err)?;
+                let mut doc: Document = serde_json::from_str(&fm_json).map_err(box_err)?;
+                doc.body = body;
+                doc.path = Some(PathBuf::from(rel_path));
+                docs.push(doc);
+            } else {
+                // Legacy fallback for rows without body in DB.
+                let abs_path = self.inner.content_dir.join(&rel_path);
+                match tokio::fs::read_to_string(&abs_path).await {
+                    Ok(raw) => {
+                        let (mut doc, _) = parse_document(&raw).map_err(box_err)?;
+                        doc.path = Some(PathBuf::from(rel_path));
+                        docs.push(doc);
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => return Err(box_err(e)),
                 }
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Err(e) => return Err(box_err(e)),
             }
         }
         Ok(docs)
@@ -470,12 +489,19 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), StorageError> {
             frontmatter_json TEXT NOT NULL,
             content_hash     TEXT NOT NULL,
             updated_at       TEXT NOT NULL,
-            deleted_at       TEXT
+            deleted_at       TEXT,
+            body             TEXT
         )",
     )
     .execute(pool)
     .await
     .map_err(box_err)?;
+
+    // Add body column to existing databases that pre-date this migration.
+    // SQLite returns an error if the column already exists; we ignore it.
+    let _ = sqlx::query("ALTER TABLE documents ADD COLUMN body TEXT")
+        .execute(pool)
+        .await;
 
     // Chunk metadata + content hashes (used by re-embedding efficiency check, FR-6)
     sqlx::query(
@@ -652,15 +678,16 @@ async fn upsert_index(
     let now = chrono::Utc::now().to_rfc3339();
 
     sqlx::query(
-        "INSERT INTO documents (id, title, path, frontmatter_json, content_hash, updated_at, deleted_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL)
+        "INSERT INTO documents (id, title, path, frontmatter_json, content_hash, updated_at, deleted_at, body)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, ?)
          ON CONFLICT(id) DO UPDATE SET
            title            = excluded.title,
            path             = excluded.path,
            frontmatter_json = excluded.frontmatter_json,
            content_hash     = excluded.content_hash,
            updated_at       = excluded.updated_at,
-           deleted_at       = NULL",
+           deleted_at       = NULL,
+           body             = excluded.body",
     )
     .bind(&id_str)
     .bind(&doc.title)
@@ -668,6 +695,7 @@ async fn upsert_index(
     .bind(&fm_json)
     .bind(hash)
     .bind(&now)
+    .bind(&doc.body)
     .execute(pool)
     .await
     .map_err(box_err)?;
