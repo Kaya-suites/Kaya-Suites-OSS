@@ -8,7 +8,8 @@
 #   1. Deletes every directory named "ee/" anywhere in the tree.
 #   2. Removes bin/kaya-cloud/ (BSL binary).
 #   3. Removes the BSL license file.
-#   4. Verifies that no remaining Cargo.toml references a deleted crate.
+#   4. Strips BSL workspace members from apps/backend/Cargo.toml.
+#   5. Verifies that no remaining Cargo.toml references a deleted crate.
 #
 # Run this script in a clean checkout of the tag you are releasing.
 # Do NOT run it in your working tree.
@@ -48,12 +49,30 @@ delete "$REPO_ROOT/apps/backend/bin/kaya-cloud"
 # 3. Remove BSL license
 delete "$REPO_ROOT/LICENSE-BSL"
 
-# 4. Sanity check: no remaining Cargo.toml should reference a deleted crate
+# 4. Strip BSL workspace members from the root Cargo.toml
+WORKSPACE_TOML="$REPO_ROOT/apps/backend/Cargo.toml"
+if [[ -f "$WORKSPACE_TOML" ]]; then
+  echo "Removing BSL members from $WORKSPACE_TOML"
+  if [[ "$DRY_RUN" == "false" ]]; then
+    sed -i.bak \
+      -e '/[[:space:]]*"crates\/ee\//d' \
+      -e '/[[:space:]]*"bin\/kaya-cloud"/d' \
+      "$WORKSPACE_TOML"
+    rm -f "$WORKSPACE_TOML.bak"
+  fi
+fi
+
+# 5. Sanity check: no remaining Cargo.toml should reference a deleted crate
 echo "Checking for dangling BSL references in Cargo.toml files..."
 if grep -r "kaya-billing\|kaya-tenant\|kaya-metering\|kaya-postgres-storage\|kaya-cloud" \
-     "$REPO_ROOT/apps/backend" --include="Cargo.toml" 2>/dev/null; then
-  echo "ERROR: Remaining Cargo.toml files still reference BSL crates." >&2
-  exit 1
+     "$REPO_ROOT/apps/backend" --include="Cargo.toml" \
+     --exclude-dir=target 2>/dev/null; then
+  if [[ "$DRY_RUN" == "true" ]]; then
+    echo "[dry-run] WARNING: BSL references remain (expected — sed did not run)."
+  else
+    echo "ERROR: Remaining Cargo.toml files still reference BSL crates." >&2
+    exit 1
+  fi
 fi
 
 echo "Strip complete. Verify with: cargo build --workspace (from apps/backend/)"
