@@ -6,10 +6,11 @@
 #
 # What it does:
 #   1. Deletes every directory named "ee/" anywhere in the tree.
-#   2. Removes bin/kaya-cloud/ (BSL binary).
-#   3. Removes the BSL license file.
-#   4. Strips BSL workspace members from apps/backend/Cargo.toml.
-#   5. Verifies that no remaining Cargo.toml references a deleted crate.
+#   2. Removes the Next.js (ee) route group (apps/web/app/(ee)/).
+#   3. Removes bin/kaya-cloud/ (BSL binary).
+#   4. Removes the BSL license file.
+#   5. Strips BSL workspace members from apps/backend/Cargo.toml.
+#   6. Verifies that no remaining Cargo.toml references a deleted crate.
 #
 # Run this script in a clean checkout of the tag you are releasing.
 # Do NOT run it in your working tree.
@@ -43,13 +44,16 @@ while IFS= read -r -d '' ee_dir; do
   delete "$ee_dir"
 done < <(find "$REPO_ROOT" -type d -name "ee" -print0)
 
-# 2. Remove the cloud binary (BSL)
+# 2. Remove the Next.js (ee) route group — parentheses prevent -name "ee" from matching
+delete "$REPO_ROOT/apps/web/app/(ee)"
+
+# 3. Remove the cloud binary (BSL)
 delete "$REPO_ROOT/apps/backend/bin/kaya-cloud"
 
-# 3. Remove BSL license
+# 4. Remove BSL license
 delete "$REPO_ROOT/LICENSE-BSL"
 
-# 4. Strip BSL workspace members from the root Cargo.toml
+# 5. Strip BSL workspace members from the root Cargo.toml
 WORKSPACE_TOML="$REPO_ROOT/apps/backend/Cargo.toml"
 if [[ -f "$WORKSPACE_TOML" ]]; then
   echo "Removing BSL members from $WORKSPACE_TOML"
@@ -62,7 +66,7 @@ if [[ -f "$WORKSPACE_TOML" ]]; then
   fi
 fi
 
-# 5. Sanity check: no remaining Cargo.toml should reference a deleted crate
+# 6. Sanity check: no remaining Cargo.toml should reference a deleted crate
 echo "Checking for dangling BSL references in Cargo.toml files..."
 if grep -r "kaya-billing\|kaya-tenant\|kaya-metering\|kaya-postgres-storage\|kaya-cloud" \
      "$REPO_ROOT/apps/backend" --include="Cargo.toml" \
