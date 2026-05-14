@@ -1,6 +1,17 @@
-//! Stripe metered billing for Kaya Suites cloud (BSL 1.1).
+// Copyright 2024 Kaya Suites. All rights reserved. — BSL 1.1
 //!
-//! Integrates with Stripe's usage-based billing API to implement the $10/month
-//! base fee with at-cost token passthrough described in the BRD.
+//! Paddle billing integration for Kaya Suites cloud.
 //!
-//! Not yet implemented — placeholder crate for license-boundary scaffolding.
+//! # Overview
+//!
+//! - [`BillingService`] — webhook event handling and 30-day refund logic.
+//! - [`verify_webhook_signature`] — standalone HMAC-SHA256 verifier used in
+//!   the Axum route handler before calling `BillingService::handle_event`.
+//! - [`SubscriptionStatus`] — Kaya's lifecycle states mapped from Paddle.
+//! - [`BillingError`] — unified error type for all billing operations.
+
+pub mod types;
+pub mod webhook;
+
+pub use types::{BillingError, SubscriptionStatus};
+pub use webhook::{BillingService, PaddleWebhookPayload, verify_webhook_signature};

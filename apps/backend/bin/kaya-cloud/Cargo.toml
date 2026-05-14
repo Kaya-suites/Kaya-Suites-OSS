@@ -18,5 +18,29 @@ axum        = { workspace = true }
 tokio       = { workspace = true }
 serde       = { workspace = true }
 serde_json  = { workspace = true }
+serde_yaml  = { workspace = true }
+anyhow      = { workspace = true }
+uuid        = { workspace = true }
+chrono      = { workspace = true }
 utoipa      = { workspace = true }
 utoipa-axum = { workspace = true }
+
+# Auth + sessions (direct dep needed alongside kaya-tenant for handler types)
+axum-login                = "0.17"
+tower-sessions            = "0.14"
+tower-sessions-sqlx-store = { version = "0.15", features = ["postgres"] }
+
+# Database
+sqlx = { version = "0.8", features = [
+    "postgres", "runtime-tokio", "uuid", "chrono",
+] }
+
+# Export archive
+zip = "2"
+
+# Middleware
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# Observability
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

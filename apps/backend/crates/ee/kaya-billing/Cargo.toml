@@ -3,9 +3,28 @@ name    = "kaya-billing"
 version = "0.1.0"
 edition = "2024"
 license = "BUSL-1.1"
-description = "Stripe metered billing for Kaya Suites cloud (BSL 1.1)"
+description = "Paddle billing integration for Kaya Suites cloud (BSL 1.1)"
 
 [dependencies]
-kaya-core   = { path = "../../kaya-core" }
-async-trait = { workspace = true }
-thiserror   = { workspace = true }
+kaya-core  = { path = "../../kaya-core" }
+thiserror  = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+chrono     = { workspace = true }
+uuid       = { workspace = true }
+reqwest    = { workspace = true }
+tokio      = { workspace = true }
+tracing    = "0.1"
+
+# Webhook signature verification
+hmac = "0.12"
+sha2 = "0.10"
+hex  = "0.4"
+
+# Database
+sqlx = { version = "0.8", features = [
+    "postgres", "runtime-tokio", "uuid", "chrono",
+] }
+
+[dev-dependencies]
+tokio = { workspace = true }

@@ -1,0 +1,35 @@
+# Token pricing for Kaya Suites model router — USD per 1 000 000 tokens.
+#
+# Keep in sync with CONFIG.md D-14 cost model.
+# Sources: Anthropic pricing page, OpenAI pricing page (as of 2026-05).
+#
+# Unknown models fall back to the Opus rate (conservative over-count).
+
+models:
+  # Anthropic
+  claude-opus-4-6:
+    input_per_million: 15.00
+    output_per_million: 75.00
+  claude-opus-4-7:
+    input_per_million: 15.00
+    output_per_million: 75.00
+  claude-sonnet-4-6:
+    input_per_million: 3.00
+    output_per_million: 15.00
+  claude-haiku-4-5-20251001:
+    input_per_million: 0.80
+    output_per_million: 4.00
+
+  # OpenAI
+  gpt-4o:
+    input_per_million: 2.50
+    output_per_million: 10.00
+  gpt-4o-mini:
+    input_per_million: 0.15
+    output_per_million: 0.60
+  text-embedding-3-small:
+    input_per_million: 0.02
+    output_per_million: 0.00
+  text-embedding-3-large:
+    input_per_million: 0.13
+    output_per_million: 0.00

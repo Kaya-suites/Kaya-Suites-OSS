@@ -1,0 +1,20 @@
+warning: unreachable expression
+ --> tests/fail/no_user_context.rs:9:23
+  |
+8 |         pool: todo!(),
+  |               ------- any code following this expression is unreachable
+9 |         user_context: todo!(),
+  |                       ^^^^^^^ unreachable expression
+  |
+  = note: `#[warn(unreachable_code)]` on by default
+  = note: this warning originates in the macro `todo` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0451]: fields `pool` and `user_context` of struct `PostgresAdapter` are private
+ --> tests/fail/no_user_context.rs:8:9
+  |
+7 |     let _ = kaya_postgres_storage::PostgresAdapter {
+  |             -------------------------------------- in this type
+8 |         pool: todo!(),
+  |         ^^^^ private field
+9 |         user_context: todo!(),
+  |         ^^^^^^^^^^^^ private field

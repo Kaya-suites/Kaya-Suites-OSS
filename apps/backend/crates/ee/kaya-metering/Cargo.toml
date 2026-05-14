@@ -3,9 +3,24 @@ name    = "kaya-metering"
 version = "0.1.0"
 edition = "2024"
 license = "BUSL-1.1"
-description = "Token usage metering for Kaya Suites cloud (BSL 1.1)"
+description = "Token usage metering, spend caps, and rate limits for Kaya Suites cloud (BSL 1.1)"
 
 [dependencies]
-kaya-core   = { path = "../../kaya-core" }
-async-trait = { workspace = true }
-thiserror   = { workspace = true }
+kaya-core  = { path = "../../kaya-core" }
+thiserror  = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+chrono     = { workspace = true }
+uuid       = { workspace = true }
+reqwest    = { workspace = true }
+tokio      = { workspace = true }
+tracing    = "0.1"
+
+# Database
+sqlx = { version = "0.8", features = [
+    "postgres", "runtime-tokio", "uuid", "chrono",
+] }
+
+[dev-dependencies]
+tokio = { workspace = true }
