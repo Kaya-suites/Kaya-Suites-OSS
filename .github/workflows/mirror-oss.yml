@@ -16,36 +16,17 @@ jobs:
       - name: Strip EE code
         run: bash scripts/strip-ee.sh
 
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.OSS_APP_ID }}
-          private-key: ${{ secrets.OSS_APP_PRIVATE_KEY }}
-          owner: Kaya-suites
-          repositories: Kaya-Suites-OSS
-
-      - name: Verify App token identity
-        env:
-          APP_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          echo "Token identity:"
-          curl -sf -H "Authorization: Bearer ${APP_TOKEN}" \
-            https://api.github.com/repos/Kaya-suites/Kaya-Suites-OSS \
-            | jq '{permissions, full_name}' \
-            || echo "WARNING: Could not read OSS repo — App may not be installed there."
-
       - name: Push to public mirror
         env:
-          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          OSS_PAT: ${{ secrets.OSS_PAT }}
         run: |
-          if [[ -z "$APP_TOKEN" ]]; then
-            echo "ERROR: GitHub App token is empty. Check OSS_APP_ID and OSS_APP_PRIVATE_KEY secrets." >&2
+          if [[ -z "$OSS_PAT" ]]; then
+            echo "ERROR: OSS_PAT secret is not set." >&2
             exit 1
           fi
 
           git config user.email "mirror-bot@kaya-suites.com"
           git config user.name "Kaya OSS Mirror"
 
-          git remote add public https://x-access-token:${APP_TOKEN}@github.com/Kaya-suites/Kaya-Suites-OSS.git
+          git remote add public https://x-access-token:${OSS_PAT}@github.com/Kaya-suites/Kaya-Suites-OSS.git
           git push public HEAD:main --force
