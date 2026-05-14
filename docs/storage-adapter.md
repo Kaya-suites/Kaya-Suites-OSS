@@ -77,14 +77,6 @@ pub trait StorageAdapter: Send + Sync {
 - Maintains an FTS5 table for BM25 full-text search (`search_text`).
 - Loads all embeddings into memory and computes cosine similarity in Rust for `search_embeddings`. Suitable for single-user OSS deployments.
 
-### `PostgresAdapter` (BSL 1.1) — not yet implemented
-
-**Location:** `crates/ee/kaya-postgres-storage/`
-
-- Scoped per `UserContext`; no static query methods (multi-tenancy seam).
-- Delegates `search_embeddings` to pgvector for server-side ANN.
-- See `docs/ee/postgres-storage.md` for details.
-
 ## Usage
 
 Business logic accepts `Arc<dyn StorageAdapter>` and never names a concrete type:
@@ -97,4 +89,4 @@ async fn commit_edit(
 ) -> Result<Document, KayaError> { … }
 ```
 
-The binary (`kaya-oss` or `kaya-cloud`) constructs the concrete adapter at startup and passes it through the application via dependency injection.
+The binary constructs the concrete adapter at startup and passes it through the application via dependency injection.

@@ -30,7 +30,7 @@ struct Route {
 /// token usage in the embedded [`Meter`].
 pub struct ModelRouter {
     routes: HashMap<OperationType, Route>,
-    /// Token-usage aggregator. Prompt 9 wires cloud billing into this.
+    /// Token-usage aggregator.
     pub meter: Arc<Meter>,
 }
 

@@ -1,8 +1,7 @@
 //! In-memory token-usage aggregator.
 //!
 //! Every LLM call returns a [`TokenUsage`] record. Callers (typically
-//! [`super::ModelRouter`]) pass it to [`Meter::record`]. Prompt 9 will wire
-//! cloud billing into this via the BSL `kaya-metering` crate.
+//! [`super::ModelRouter`]) pass it to [`Meter::record`].
 
 use std::sync::{Arc, Mutex};
 

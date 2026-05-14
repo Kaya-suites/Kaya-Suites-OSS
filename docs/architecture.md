@@ -37,20 +37,14 @@ The only shared surface is `packages/api-client/`, a generated TypeScript client
 ## Backend crate graph
 
 ```
-bin/kaya-oss          (Apache 2.0)  ──► kaya-core, kaya-storage
-bin/kaya-cloud        (BSL 1.1)     ──► kaya-core, kaya-storage, ee/*
+bin/kaya-oss   (Apache 2.0) ──► kaya-core, kaya-storage
 
 crates/
-  kaya-core           (Apache 2.0)  — traits: StorageAdapter, AuthAdapter, LlmProvider
-  kaya-storage        (Apache 2.0)  — SqliteAdapter implementation
-  ee/
-    kaya-postgres-storage (BSL 1.1) — PostgresAdapter implementation
-    kaya-billing          (BSL 1.1) — Paddle usage-based billing
-    kaya-metering         (BSL 1.1) — per-user token and spend metering
-    kaya-tenant           (BSL 1.1) — multi-tenant organisation model
+  kaya-core    (Apache 2.0) — traits: StorageAdapter, AuthAdapter, LlmProvider
+  kaya-storage (Apache 2.0) — SqliteAdapter implementation
 ```
 
-`bin/kaya-oss` must compile with **zero** `ee/` dependencies. This is verified by CI.
+The hosted cloud distribution adds further crates under `ee/` (BSL 1.1, not included in this mirror).
 
 ## Key architectural seams
 

@@ -4,15 +4,13 @@ Thank you for your interest in contributing.
 
 ## What is open source
 
-Everything **outside** `apps/backend/crates/ee/` and `apps/backend/bin/kaya-cloud/` is Apache 2.0 and open to contributions. The `ee/` crates and the `kaya-cloud` binary are BSL 1.1 — source-available but not open to external contributions.
+Everything in this mirror is Apache 2.0 and open to contributions.
 
 The OSS surface you can contribute to:
 - `crates/kaya-core/` — core traits, edit primitives, agent loop
 - `crates/kaya-storage/` — SQLite adapter
 - `bin/kaya-oss/` — self-hosted binary
 - `apps/web/app/(shared)/` — Apache-licensed Next.js pages
-
-Never import an `ee/` crate from an Apache crate. The `bin/kaya-oss` binary must build with zero `ee/` dependencies.
 
 ## Development setup
 
@@ -39,7 +37,6 @@ cargo build --release --bin kaya-oss
 ```bash
 # Rust
 cd apps/backend && cargo test --workspace
-# (ee/ integration tests skip without PG_TEST_DATABASE_URL)
 
 # Frontend
 pnpm --filter apps/web lint
@@ -51,7 +48,7 @@ pnpm --filter apps/web lint
 2. Run `cargo test` and `pnpm build` before pushing.
 3. Keep PRs focused — one feature or fix per PR.
 4. Write tests for new behaviour.
-5. Do not add BSL or SSPL dependencies to `bin/kaya-oss/Cargo.toml`.
+5. Do not add non-Apache dependencies to `bin/kaya-oss/Cargo.toml`.
 
 CI must be green before merge.
 

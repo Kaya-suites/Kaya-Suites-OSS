@@ -40,10 +40,6 @@ pub trait AuthAdapter: Send + Sync {
 
 Returns a fixed single-user session with a deterministic UUID. Performs no network call. Used by `bin/kaya-oss`.
 
-### `CloudAuthAdapter` (BSL 1.1) — not yet implemented
-
-Validates a session cookie against the database. Used by `bin/kaya-cloud`. See `docs/ee/cloud-auth.md`.
-
 ## Usage pattern
 
 ```rust

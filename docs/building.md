@@ -26,13 +26,11 @@ The frontend dev server proxies API calls to `NEXT_PUBLIC_API_URL` (default `htt
 ```bash
 cd apps/backend
 
-# Build all crates (including EE crates if present)
 cargo build --workspace
 
 # Run the OSS binary
 cargo run --bin kaya-oss
 
-# Run tests (EE integration tests skip without PG_TEST_DATABASE_URL)
 cargo test --workspace
 ```
 

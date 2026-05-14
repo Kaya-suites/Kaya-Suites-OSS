@@ -92,9 +92,7 @@ pub enum StorageError {
 /// The trait is object-safe: all methods take `&self` and return boxed futures
 /// via `async_trait`. Implementations must be `Send + Sync`.
 ///
-/// Two implementations are planned:
-/// - `SqliteAdapter` in `crates/kaya-storage` (Apache 2.0)
-/// - `PostgresAdapter` in `crates/ee/kaya-postgres-storage` (BSL 1.1)
+/// The `SqliteAdapter` implementation lives in `crates/kaya-storage`.
 #[async_trait]
 pub trait StorageAdapter: Send + Sync {
     // ── Documents ─────────────────────────────────────────────────────────────

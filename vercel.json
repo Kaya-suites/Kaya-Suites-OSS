@@ -5,6 +5,6 @@
   "outputDirectory": ".next",
   "installCommand": "pnpm install",
   "env": {
-    "NEXT_PUBLIC_API_URL": "https://kaya-cloud.fly.dev"
+    "NEXT_PUBLIC_API_URL": "http://localhost:3001"
   }
 }

@@ -53,6 +53,17 @@ delete "$REPO_ROOT/apps/backend/bin/kaya-cloud"
 # 4. Remove BSL license
 delete "$REPO_ROOT/LICENSE-BSL"
 
+# 4a. Remove EE-only files that are not inside an ee/ or bin/kaya-cloud/ directory
+delete "$REPO_ROOT/CONFIG.md"
+
+# 4b. Reset vercel.json API URL to a neutral placeholder (file itself is useful to OSS users)
+if [[ -f "$REPO_ROOT/vercel.json" && "$DRY_RUN" == "false" ]]; then
+  echo "Resetting NEXT_PUBLIC_API_URL in vercel.json"
+  sed -i.bak 's|"NEXT_PUBLIC_API_URL": ".*"|"NEXT_PUBLIC_API_URL": "http://localhost:3001"|' \
+    "$REPO_ROOT/vercel.json"
+  rm -f "$REPO_ROOT/vercel.json.bak"
+fi
+
 # 5. Strip BSL workspace members from the root Cargo.toml
 WORKSPACE_TOML="$REPO_ROOT/apps/backend/Cargo.toml"
 if [[ -f "$WORKSPACE_TOML" ]]; then
