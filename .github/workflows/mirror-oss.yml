@@ -26,9 +26,16 @@ jobs:
           repositories: Kaya-Suites-OSS
 
       - name: Push to public mirror
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          if [[ -z "$APP_TOKEN" ]]; then
+            echo "ERROR: GitHub App token is empty. Check OSS_APP_ID and OSS_APP_PRIVATE_KEY secrets." >&2
+            exit 1
+          fi
+
           git config user.email "mirror-bot@kaya-suites.com"
           git config user.name "Kaya OSS Mirror"
 
-          git remote add public https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/Kaya-suites/Kaya-Suites-OSS.git
+          git remote add public https://x-access-token:${APP_TOKEN}@github.com/Kaya-suites/Kaya-Suites-OSS.git
           git push public HEAD:main --force
