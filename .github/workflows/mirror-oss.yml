@@ -59,6 +59,10 @@ jobs:
           git config user.email "mirror-bot@kaya-suites.com"
           git config user.name "Kaya OSS Mirror"
 
+          # Remove the GITHUB_TOKEN credential helper injected by actions/checkout
+          # so our PAT is used instead of github-actions[bot].
+          git config --unset-all http.https://github.com/.extraheader || true
+
           git remote add public https://x-access-token:${OSS_PAT}@github.com/Kaya-suites/Kaya-Suites-OSS.git
           git push public HEAD:main --force
           echo "Mirror push complete."
