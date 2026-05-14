@@ -16,17 +16,49 @@ jobs:
       - name: Strip EE code
         run: bash scripts/strip-ee.sh
 
-      - name: Push to public mirror
+      - name: Diagnostics
         env:
           OSS_PAT: ${{ secrets.OSS_PAT }}
         run: |
+          echo "=== Git state ==="
+          git log --oneline -5
+          git status
+
+          echo "=== Verifying OSS_PAT is set ==="
           if [[ -z "$OSS_PAT" ]]; then
             echo "ERROR: OSS_PAT secret is not set." >&2
             exit 1
           fi
+          echo "OSS_PAT is set."
 
+          echo "=== Checking OSS repo accessibility ==="
+          HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token ${OSS_PAT}" \
+            https://api.github.com/repos/Kaya-suites/Kaya-Suites-OSS)
+          echo "GitHub API response: $HTTP_CODE"
+          if [[ "$HTTP_CODE" != "200" ]]; then
+            echo "ERROR: Cannot access OSS repo (HTTP $HTTP_CODE). Check PAT scope and repo name." >&2
+            exit 1
+          fi
+
+          echo "=== Checking push permission ==="
+          PUSH_ACCESS=$(curl -sf \
+            -H "Authorization: token ${OSS_PAT}" \
+            https://api.github.com/repos/Kaya-suites/Kaya-Suites-OSS \
+            | jq -r '.permissions.push')
+          echo "Push access: $PUSH_ACCESS"
+          if [[ "$PUSH_ACCESS" != "true" ]]; then
+            echo "ERROR: PAT does not have push access to OSS repo." >&2
+            exit 1
+          fi
+
+      - name: Push to public mirror
+        env:
+          OSS_PAT: ${{ secrets.OSS_PAT }}
+        run: |
           git config user.email "mirror-bot@kaya-suites.com"
           git config user.name "Kaya OSS Mirror"
 
           git remote add public https://x-access-token:${OSS_PAT}@github.com/Kaya-suites/Kaya-Suites-OSS.git
           git push public HEAD:main --force
+          echo "Mirror push complete."
