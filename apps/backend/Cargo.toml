@@ -4,12 +4,7 @@
 members = [
   "crates/kaya-core",
   "crates/kaya-storage",
-  "crates/ee/kaya-billing",
-  "crates/ee/kaya-tenant",
-  "crates/ee/kaya-metering",
-  "crates/ee/kaya-postgres-storage",
   "bin/kaya-oss",
-  "bin/kaya-cloud",
 ]
 resolver = "2"
 
