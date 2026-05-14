@@ -14,7 +14,12 @@ jobs:
           fetch-depth: 0
 
       - name: Strip EE code
-        run: bash scripts/strip-ee.sh
+        run: |
+          bash scripts/strip-ee.sh
+          git config user.email "mirror-bot@kaya-suites.com"
+          git config user.name "Kaya OSS Mirror"
+          git add -A
+          git commit -m "Strip EE code for OSS mirror"
 
       - name: Diagnostics
         env:
@@ -56,9 +61,6 @@ jobs:
         env:
           OSS_PAT: ${{ secrets.OSS_PAT }}
         run: |
-          git config user.email "mirror-bot@kaya-suites.com"
-          git config user.name "Kaya OSS Mirror"
-
           # Remove the GITHUB_TOKEN credential helper injected by actions/checkout
           # so our PAT is used instead of github-actions[bot].
           git config --unset-all http.https://github.com/.extraheader || true
