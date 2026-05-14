@@ -25,6 +25,16 @@ jobs:
           owner: Kaya-suites
           repositories: Kaya-Suites-OSS
 
+      - name: Verify App token identity
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          echo "Token identity:"
+          curl -sf -H "Authorization: Bearer ${APP_TOKEN}" \
+            https://api.github.com/repos/Kaya-suites/Kaya-Suites-OSS \
+            | jq '{permissions, full_name}' \
+            || echo "WARNING: Could not read OSS repo — App may not be installed there."
+
       - name: Push to public mirror
         env:
           APP_TOKEN: ${{ steps.app-token.outputs.token }}
