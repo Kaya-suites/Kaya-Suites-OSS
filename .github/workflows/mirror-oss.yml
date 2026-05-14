@@ -20,7 +20,6 @@ jobs:
           git config user.email "mirror-bot@kaya-suites.com"
           git config user.name "Kaya OSS Mirror"
           git add -A
-          git commit -m "Strip EE code for OSS mirror"
 
       - name: Diagnostics
         env:
@@ -62,10 +61,28 @@ jobs:
         env:
           OSS_PAT: ${{ secrets.OSS_PAT }}
         run: |
-          # Remove the GITHUB_TOKEN credential helper injected by actions/checkout
-          # so our PAT is used instead of github-actions[bot].
           git config --unset-all http.https://github.com/.extraheader || true
-
           git remote add public https://x-access-token:${OSS_PAT}@github.com/Kaya-suites/Kaya-Suites-OSS.git
-          git push public HEAD:main --force
-          echo "Mirror push complete."
+
+          # Fetch the current OSS HEAD so we can parent the new commit off it,
+          # building an independent OSS history with no link to private commits.
+          git fetch public main:refs/remotes/public/main 2>/dev/null || true
+          PREV_OSS=$(git rev-parse refs/remotes/public/main 2>/dev/null || echo "")
+
+          # Capture the stripped working tree as a git tree object.
+          STRIPPED_TREE=$(git write-tree)
+
+          # Build the commit message from the private commit that triggered this run.
+          COMMIT_MSG=$(git log -1 --format="%s%n%n%b" HEAD)
+
+          # Create a new commit whose parent is the previous OSS commit (not the
+          # private repo commit). This severs the history link: no ancestor of the
+          # OSS commit ever contains EE files.
+          if [ -n "$PREV_OSS" ]; then
+            OSS_COMMIT=$(git commit-tree "$STRIPPED_TREE" -p "$PREV_OSS" -m "$COMMIT_MSG")
+          else
+            OSS_COMMIT=$(git commit-tree "$STRIPPED_TREE" -m "$COMMIT_MSG")
+          fi
+
+          git push public "${OSS_COMMIT}:refs/heads/main" --force
+          echo "Mirror push complete. OSS commit: $OSS_COMMIT"
