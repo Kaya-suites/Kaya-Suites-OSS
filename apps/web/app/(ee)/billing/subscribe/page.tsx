@@ -68,7 +68,7 @@ export default function SubscribePage() {
     window.Paddle.Checkout.open({
       items: [{ priceId: PADDLE_PRICE_ID, quantity: 1 }],
       customData: { user_id: userId },
-      successUrl: `${window.location.origin}/ee/billing/success`,
+      successUrl: `${window.location.origin}/billing/success`,
     });
 
     // Paddle opens an overlay; reset loading after a short delay so the button

@@ -18,7 +18,7 @@ All crates use `edition = "2024"`.
 
 ## License boundary
 
-- Anything inside a directory named `ee/` → **BSL 1.1**
+- Anything inside a directory named `ee/` → **BSL 1.1** (backend: `crates/ee/`, `bin/kaya-cloud/`; frontend: `app/(ee)/`)
 - Everything else → **Apache 2.0**
 - `bin/kaya-oss/Cargo.toml` lists **only** Apache crates as dependencies.
 - `bin/kaya-cloud/Cargo.toml` is the **only** place BSL crates are pulled in.
@@ -66,15 +66,13 @@ The future `PostgresAdapter` constructor takes a `UserContext`. All query method
 
 - Target: **Next.js 16.x** (currently 16.2.6). Flag any tooling that defaults to 15.
 - App router only. No pages router.
-- Route layout: `app/(shared)/` for Apache routes, `app/ee/` for BSL routes.
+- Route layout: `app/(shared)/` for Apache routes, `app/(ee)/` for BSL routes. Both are route groups — `(ee)` does **not** add an `/ee/` URL prefix.
 - Component layout: `components/shared/` and `components/ee/`.
 - Backend URL: `NEXT_PUBLIC_API_URL`, default `http://localhost:3001`.
 
 ## What has NOT been implemented yet
 
-- No StorageAdapter implementation (trait only)
 - No AuthAdapter implementation (trait only)
-- No LlmProvider implementation (trait only)
-- No agent loop
-- No auth wiring (Stripe, Resend, magic-link)
+- Metering not yet wired into the agent loop
 - No multi-tenant Postgres adapter
+- Resend spend-alert and circuit-breaker emails are TODO stubs

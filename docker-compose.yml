@@ -1,0 +1,28 @@
+version: "3.9"
+# OSS self-hosted install. Bring your own API keys.
+#
+# Quick start:
+#   ANTHROPIC_API_KEY=sk-... OPENAI_API_KEY=sk-... docker compose up
+#
+# Data is persisted in a named volume (kaya_data).
+
+services:
+  kaya-oss:
+    image: ghcr.io/kaya-suites/kaya-oss:latest
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile.oss
+    ports:
+      - "3001:3001"
+    volumes:
+      - kaya_data:/data
+    environment:
+      KAYA_DB_PATH: /data/kaya.db
+      KAYA_CONTENT_DIR: /data/content
+      KAYA_CONFIG: /data/kaya.yaml
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    restart: unless-stopped
+
+volumes:
+  kaya_data:

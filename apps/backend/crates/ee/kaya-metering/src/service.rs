@@ -186,6 +186,14 @@ impl MeteringService {
         self.circuit.is_tripped()
     }
 
+    pub fn spend_cap_usd(&self) -> f64 {
+        self.config.spend_cap_usd
+    }
+
+    pub fn included_invocations(&self) -> i64 {
+        self.config.included_invocations
+    }
+
     // ── Internal ─────────────────────────────────────────────────────────────
 
     /// Check whether the user has crossed the 80% alert threshold and log it.

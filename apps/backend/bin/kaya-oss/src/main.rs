@@ -16,6 +16,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use rust_embed::RustEmbed;
 use bytes::Bytes;
 use chrono::Utc;
 use futures::StreamExt;
@@ -779,6 +780,42 @@ fn apply_user_modification(mut edit: ProposedEdit, original: &str, user_text: &s
     edit
 }
 
+// ── Embedded static frontend ──────────────────────────────────────────────────
+
+/// Embeds the Next.js static export from `frontend/` at compile time.
+/// Run `pnpm build && mv apps/web/out apps/backend/bin/kaya-oss/frontend` to populate.
+#[derive(RustEmbed)]
+#[folder = "frontend/"]
+struct Assets;
+
+async fn static_handler(uri: axum::http::Uri) -> Response {
+    let path = uri.path().trim_start_matches('/');
+    // Try exact path, then path + ".html", then index.html (SPA fallback).
+    let candidates = [
+        path.to_string(),
+        format!("{path}.html"),
+        "index.html".to_string(),
+    ];
+
+    for candidate in &candidates {
+        if let Some(content) = Assets::get(candidate) {
+            let mime = mime_guess::from_path(candidate)
+                .first_or_octet_stream()
+                .to_string();
+            return Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, mime)
+                .body(Body::from(content.data.to_vec()))
+                .unwrap();
+        }
+    }
+
+    Response::builder()
+        .status(StatusCode::NOT_FOUND)
+        .body(Body::from("not found"))
+        .unwrap()
+}
+
 /// Generate a minimal valid single-page PDF for `title`.
 fn minimal_pdf(title: &str, body: &str) -> Vec<u8> {
     let safe_title = title.replace(['(', ')', '\\', '\n', '\r'], " ");
@@ -946,6 +983,7 @@ async fn main() {
         .route("/sessions/{id}/messages", get(get_session_messages))
         .route("/sessions/{id}/chat", post(chat_stream))
         .route("/edits/{id}/approve", post(approve_edit))
+        .fallback(static_handler)
         .with_state(state)
         .layer(cors);
 

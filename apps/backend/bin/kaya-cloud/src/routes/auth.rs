@@ -77,7 +77,7 @@ async fn verify(
                 tracing::error!(error = %e, "session login failed");
                 return (StatusCode::INTERNAL_SERVER_ERROR, "session error").into_response();
             }
-            Redirect::to("/").into_response()
+            Redirect::to("/documents").into_response()
         }
         Err(MagicLinkError::Expired) => error_page(
             StatusCode::GONE,
@@ -138,7 +138,7 @@ h1{{font-size:20px}}p{{color:#555}}a{{color:#111}}</style></head>
 <body>
   <h1>{title}</h1>
   <p>{message}</p>
-  <p><a href="/ee/auth/signin">Request a new sign-in link &rarr;</a></p>
+  <p><a href="/auth/signin">Request a new sign-in link &rarr;</a></p>
 </body></html>"#
     );
     (status, [("content-type", "text/html; charset=utf-8")], html).into_response()

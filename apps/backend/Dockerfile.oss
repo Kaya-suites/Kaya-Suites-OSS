@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1
+# Multi-stage build for kaya-oss (Apache 2.0)
+# The frontend/ directory must be populated before building:
+#   cd apps/web && NEXT_PUBLIC_KAYA_BUILD=oss pnpm build
+#   cp -r apps/web/out apps/backend/bin/kaya-oss/frontend
+
+FROM rust:1.87-slim AS builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+
+COPY apps/backend/Cargo.toml apps/backend/Cargo.lock ./
+COPY apps/backend/crates ./crates
+COPY apps/backend/bin ./bin
+
+RUN cargo build --release --bin kaya-oss
+
+# ── Runtime ───────────────────────────────────────────────────────────────────
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /app/target/release/kaya-oss ./kaya-oss
+
+EXPOSE 3001
+
+CMD ["./kaya-oss"]

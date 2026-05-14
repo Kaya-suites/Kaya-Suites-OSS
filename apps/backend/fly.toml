@@ -1,0 +1,42 @@
+# Fly.io configuration for kaya-cloud (BSL 1.1)
+# Deploy: fly deploy --config apps/backend/fly.toml
+
+app = "kaya-cloud"
+primary_region = "iad"
+
+[build]
+  dockerfile = "apps/backend/Dockerfile"
+
+[env]
+  PORT = "8080"
+  PADDLE_API_BASE = "https://api.paddle.com"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[deploy]
+  strategy = "rolling"
+
+# Secrets to set via `fly secrets set`:
+#   NEON_DATABASE_URL
+#   RESEND_API_KEY
+#   RESEND_FROM
+#   FRONTEND_BASE_URL
+#   PADDLE_API_KEY
+#   PADDLE_WEBHOOK_SECRET
+#   ADMIN_EMAIL
+#   PADDLE_OVERAGE_PRICE_ID  (optional)
+#   PRICING_CONFIG_PATH      (optional — defaults to config/pricing.yaml)

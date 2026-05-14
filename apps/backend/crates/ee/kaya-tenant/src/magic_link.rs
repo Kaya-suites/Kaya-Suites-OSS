@@ -94,7 +94,7 @@ impl MagicLinkService {
     pub async fn request_link(&self, email: &str) -> Result<(), MagicLinkError> {
         let token = self.create_and_store_token(email).await?;
         let link = format!(
-            "{}/ee/auth/verify?token={}",
+            "{}/auth/verify?token={}",
             self.frontend_base_url.trim_end_matches('/'),
             token,
         );

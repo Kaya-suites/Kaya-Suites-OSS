@@ -146,6 +146,7 @@ async fn main() -> anyhow::Result<()> {
         .merge(routes::auth::router())
         .merge(routes::account::router())
         .merge(routes::billing::router())
+        .merge(routes::dashboard::router())
         .merge(routes::admin::router())
         .layer(auth_layer)
         .layer(cors)

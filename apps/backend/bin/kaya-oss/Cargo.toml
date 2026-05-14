@@ -25,3 +25,5 @@ bytes        = { workspace = true }
 tower-http   = { version = "0.6", features = ["cors"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 sqlx         = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
+rust-embed   = { version = "8", features = ["axum"] }
+mime_guess   = "2"
