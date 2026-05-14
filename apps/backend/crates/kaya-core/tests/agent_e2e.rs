@@ -218,7 +218,7 @@ async fn search_then_edit_requires_approval() {
 
     let log = Arc::new(InvocationLog::new());
     let agent = AgentLoop::new(default_tools());
-    let mut stream = agent.run("Update the test document.".into(), ctx.clone(), log.clone());
+    let mut stream = agent.run("Update the test document.".into(), vec![], ctx.clone(), log.clone());
 
     let mut events: Vec<AgentEvent> = Vec::new();
     while let Some(ev) = stream.next().await {
@@ -298,7 +298,7 @@ async fn invocation_log_captures_every_tool_used() {
 
     let log = Arc::new(InvocationLog::new());
     let agent = AgentLoop::new(default_tools());
-    let mut stream = agent.run("Show me the documents.".into(), ctx, log.clone());
+    let mut stream = agent.run("Show me the documents.".into(), vec![], ctx, log.clone());
     while let Some(ev) = stream.next().await {
         ev.expect("no errors");
     }
@@ -346,7 +346,7 @@ async fn cancellation_does_not_panic_or_leak() {
 
     let log = Arc::new(InvocationLog::new());
     let agent = AgentLoop::new(default_tools());
-    let mut stream = agent.run("List docs.".into(), ctx, log);
+    let mut stream = agent.run("List docs.".into(), vec![], ctx, log);
 
     // Consume only the first event, then drop the stream.
     let first = stream.next().await;
@@ -389,7 +389,7 @@ async fn create_document_requires_approval() {
 
     let log = Arc::new(InvocationLog::new());
     let agent = AgentLoop::new(default_tools());
-    let mut stream = agent.run("Create a doc.".into(), ctx, log);
+    let mut stream = agent.run("Create a doc.".into(), vec![], ctx, log);
 
     let mut events = Vec::new();
     while let Some(ev) = stream.next().await {

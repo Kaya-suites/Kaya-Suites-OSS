@@ -3,13 +3,11 @@
 //! # Architecture
 //! - SQLite is the **source of truth** for document bodies (stored in the
 //!   `body` column of the `documents` table).
-//! - On first startup, existing `.md` files in `content_dir` are imported
-//!   into the DB by the reconciliation pass; after that, disk files are not
-//!   written or read for normal operations.
-//! - `get_document` and `list_documents` read exclusively from the DB.
-//!   A disk fall-back is retained only for rows that pre-date the `body`
-//!   column (i.e. `body IS NULL`) so that existing installations migrate
-//!   gracefully on the next reconciliation pass.
+//! - `save_document` writes the `.md` file to `content_dir` and upserts the
+//!   DB row. Both are kept in sync on every write.
+//! - `get_document` and `list_documents` read from the DB. A disk fall-back
+//!   is used for rows with `body IS NULL` (legacy rows not yet reconciled) and
+//!   for rows whose `frontmatter_json` is corrupt.
 //! - On startup a background task reconciles the index with the current state
 //!   of disk so that manually added `.md` files are detected (FR-5).
 //!
@@ -141,13 +139,15 @@ impl StorageAdapter for SqliteAdapter {
         if let Some(body) = db_body {
             // Body is in the DB — reconstruct from stored JSON + body column.
             let fm_json: String = row.try_get("frontmatter_json").map_err(box_err)?;
-            let mut doc: Document = serde_json::from_str(&fm_json).map_err(box_err)?;
-            doc.body = body;
-            doc.path = Some(PathBuf::from(rel_path));
-            return Ok(doc);
+            if let Ok(mut doc) = serde_json::from_str::<Document>(&fm_json) {
+                doc.body = body;
+                doc.path = Some(PathBuf::from(rel_path));
+                return Ok(doc);
+            }
+            // DB data is corrupt — fall through to disk.
         }
 
-        // Legacy fallback: read from disk for rows that don't have body in DB yet.
+        // Fallback: read from disk (legacy rows without body, or corrupt DB data).
         let abs_path = self.inner.content_dir.join(&rel_path);
         let raw = tokio::fs::read_to_string(&abs_path).await.map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
@@ -161,12 +161,19 @@ impl StorageAdapter for SqliteAdapter {
         Ok(doc)
     }
 
-    /// Persist a document to the database. No disk write is performed.
+    /// Persist a document to the database and write the `.md` file to disk.
     async fn save_document(&self, doc: &Document) -> Result<(), StorageError> {
         let rel_path = doc
             .path
             .clone()
             .unwrap_or_else(|| PathBuf::from(format!("{}.md", doc.id)));
+
+        let abs_path = self.inner.content_dir.join(&rel_path);
+        if let Some(parent) = abs_path.parent() {
+            tokio::fs::create_dir_all(parent).await.map_err(box_err)?;
+        }
+        let markdown = to_markdown(doc).map_err(box_err)?;
+        tokio::fs::write(&abs_path, &markdown).await.map_err(box_err)?;
 
         let rel_str = rel_path.to_string_lossy().to_string();
         let hash = sha256_hex(doc.body.as_bytes());

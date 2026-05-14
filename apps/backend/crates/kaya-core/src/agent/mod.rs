@@ -19,7 +19,7 @@
 //! # async fn example(ctx: Arc<AgentContext>) {
 //! let log = Arc::new(InvocationLog::new());
 //! let agent = AgentLoop::new(default_tools());
-//! let mut stream = agent.run("Update the onboarding doc".into(), ctx, log.clone());
+//! let mut stream = agent.run("Update the onboarding doc".into(), vec![], ctx, log.clone());
 //!
 //! while let Some(event) = stream.next().await {
 //!     match event.unwrap() {

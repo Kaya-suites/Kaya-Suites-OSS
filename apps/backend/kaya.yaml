@@ -11,10 +11,10 @@ routing:
     model: gpt-4o-mini
   document_generation:
     provider: anthropic
-    model: claude-opus-4-6
+    model: claude-sonnet-4-6
   edit_proposal:
     provider: anthropic
-    model: claude-opus-4-6
+    model: claude-sonnet-4-6
   stale_detection:
     provider: openai
     model: gpt-4o-mini

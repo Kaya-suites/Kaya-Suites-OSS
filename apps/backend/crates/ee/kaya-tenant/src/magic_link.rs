@@ -55,8 +55,9 @@ impl MagicLinkService {
     /// Generate a fresh token, upsert the user row, persist the token hash,
     /// and return the **raw** token for inclusion in the magic link URL.
     ///
-    /// `pub(crate)` so integration tests can call this without sending email.
-    pub(crate) async fn create_and_store_token(
+    /// `pub` so integration tests can call this without sending email.
+    #[doc(hidden)]
+    pub async fn create_and_store_token(
         &self,
         email: &str,
     ) -> Result<String, MagicLinkError> {

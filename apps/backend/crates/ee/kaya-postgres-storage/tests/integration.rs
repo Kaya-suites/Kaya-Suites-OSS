@@ -47,6 +47,7 @@ fn make_user_ctx(user_id: Uuid) -> UserContext {
 // ── Document isolation ────────────────────────────────────────────────────────
 
 /// FR-4 / NFR §6.3: User A writes a document; User B's adapter cannot see it.
+#[ignore = "requires DATABASE_URL pointing to a Postgres instance with pgvector"]
 #[sqlx::test(migrator = "MIGRATOR")]
 async fn user_b_cannot_read_user_a_document(pool: PgPool) {
     let uid_a = Uuid::new_v4();
@@ -69,6 +70,7 @@ async fn user_b_cannot_read_user_a_document(pool: PgPool) {
 }
 
 /// User B's list_documents must not contain any of User A's documents.
+#[ignore = "requires DATABASE_URL pointing to a Postgres instance with pgvector"]
 #[sqlx::test(migrator = "MIGRATOR")]
 async fn list_documents_is_scoped_to_user(pool: PgPool) {
     let uid_a = Uuid::new_v4();
@@ -92,6 +94,7 @@ async fn list_documents_is_scoped_to_user(pool: PgPool) {
 }
 
 /// delete_document soft-deletes and makes the document invisible to list/get.
+#[ignore = "requires DATABASE_URL pointing to a Postgres instance with pgvector"]
 #[sqlx::test(migrator = "MIGRATOR")]
 async fn delete_document_hides_from_owner(pool: PgPool) {
     let uid = Uuid::new_v4();
@@ -112,6 +115,7 @@ async fn delete_document_hides_from_owner(pool: PgPool) {
 // ── Chunk and FTS isolation ───────────────────────────────────────────────────
 
 /// save_chunk / search_text results are isolated per user.
+#[ignore = "requires DATABASE_URL pointing to a Postgres instance with pgvector"]
 #[sqlx::test(migrator = "MIGRATOR")]
 async fn fts_search_is_scoped_to_user(pool: PgPool) {
     let uid_a = Uuid::new_v4();
@@ -153,6 +157,7 @@ async fn fts_search_is_scoped_to_user(pool: PgPool) {
 // ── Embedding isolation ───────────────────────────────────────────────────────
 
 /// User A's embeddings must not appear in User B's vector search results.
+#[ignore = "requires DATABASE_URL pointing to a Postgres instance with pgvector"]
 #[sqlx::test(migrator = "MIGRATOR")]
 async fn vector_search_is_scoped_to_user(pool: PgPool) {
     let uid_a = Uuid::new_v4();
@@ -202,6 +207,7 @@ async fn vector_search_is_scoped_to_user(pool: PgPool) {
 // ── Chunk hash round-trip ─────────────────────────────────────────────────────
 
 /// get_chunk_hashes returns only this user's hashes for the given document.
+#[ignore = "requires DATABASE_URL pointing to a Postgres instance with pgvector"]
 #[sqlx::test(migrator = "MIGRATOR")]
 async fn chunk_hashes_are_scoped(pool: PgPool) {
     let uid_a = Uuid::new_v4();
@@ -248,6 +254,7 @@ async fn chunk_hashes_are_scoped(pool: PgPool) {
 
 /// Running the migrator twice against the same database must succeed.
 /// sqlx::test already applies migrations once; we apply again manually.
+#[ignore = "requires DATABASE_URL pointing to a Postgres instance with pgvector"]
 #[sqlx::test(migrator = "MIGRATOR")]
 async fn migration_is_idempotent(pool: PgPool) {
     // Running again must not panic or return an error.

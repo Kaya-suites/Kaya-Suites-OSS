@@ -62,6 +62,7 @@ fn make_svc(pool: PgPool) -> MagicLinkService {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 /// FR-28: a valid token can be created and verified exactly once.
+#[ignore = "requires DATABASE_URL pointing to a Postgres instance"]
 #[sqlx::test]
 async fn magic_link_round_trip(pool: PgPool) {
     setup_schema(&pool).await;
@@ -79,6 +80,7 @@ async fn magic_link_round_trip(pool: PgPool) {
 }
 
 /// A token can only be used once; the second attempt returns AlreadyUsed.
+#[ignore = "requires DATABASE_URL pointing to a Postgres instance"]
 #[sqlx::test]
 async fn magic_link_replay_rejected(pool: PgPool) {
     setup_schema(&pool).await;
@@ -97,6 +99,7 @@ async fn magic_link_replay_rejected(pool: PgPool) {
 }
 
 /// A token whose expiry is in the past is rejected with Expired.
+#[ignore = "requires DATABASE_URL pointing to a Postgres instance"]
 #[sqlx::test]
 async fn expired_token_rejected(pool: PgPool) {
     setup_schema(&pool).await;
@@ -119,6 +122,7 @@ async fn expired_token_rejected(pool: PgPool) {
 }
 
 /// An unknown / garbage token returns Invalid.
+#[ignore = "requires DATABASE_URL pointing to a Postgres instance"]
 #[sqlx::test]
 async fn unknown_token_rejected(pool: PgPool) {
     setup_schema(&pool).await;
@@ -136,6 +140,7 @@ async fn unknown_token_rejected(pool: PgPool) {
 }
 
 /// Requesting a link twice for the same email upserts the user (no duplicate rows).
+#[ignore = "requires DATABASE_URL pointing to a Postgres instance"]
 #[sqlx::test]
 async fn idempotent_user_upsert(pool: PgPool) {
     setup_schema(&pool).await;

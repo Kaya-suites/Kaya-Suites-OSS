@@ -175,7 +175,7 @@ async fn main() {
     println!("── Agent turn ─────────────────────────────────────────────────");
     println!("User: Update the onboarding guide.\n");
 
-    let mut stream = agent.run("Update the onboarding guide.".into(), ctx, log.clone());
+    let mut stream = agent.run("Update the onboarding guide.".into(), vec![], ctx, log.clone());
     let mut proposed_edit = None;
 
     while let Some(ev) = stream.next().await {
