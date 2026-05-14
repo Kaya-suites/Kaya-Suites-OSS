@@ -10,20 +10,16 @@ description = "OSS self-hosted binary for Kaya Suites (Apache 2.0)"
 [dependencies]
 kaya-core    = { path = "../../crates/kaya-core" }
 kaya-storage = { path = "../../crates/kaya-storage" }
+kaya-server  = { path = "../../crates/kaya-server" }
 
 axum         = { workspace = true, features = ["macros"] }
 tokio        = { workspace = true }
-serde        = { workspace = true }
 serde_json   = { workspace = true }
 utoipa       = { workspace = true }
 utoipa-axum  = { workspace = true }
 uuid         = { workspace = true }
-chrono       = { workspace = true }
-futures      = { workspace = true }
-bytes        = { workspace = true }
 
 tower-http   = { version = "0.6", features = ["cors"] }
-tokio-stream = { version = "0.1", features = ["sync"] }
 sqlx         = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
 rust-embed   = { version = "8", features = ["axum"] }
 mime_guess   = "2"

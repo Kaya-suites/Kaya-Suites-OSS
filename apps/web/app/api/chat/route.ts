@@ -9,11 +9,15 @@ export async function POST(request: NextRequest): Promise<Response> {
   const sessionId = body.sessionId ?? "00000000-0000-0000-0000-000000000000";
   const message = body.message ?? "";
 
+  const cookie = request.headers.get("cookie") ?? "";
   let upstream: globalThis.Response;
   try {
     upstream = await fetch(`${API_URL}/sessions/${sessionId}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(cookie && { cookie }),
+      },
       body: JSON.stringify({ message }),
     });
   } catch {

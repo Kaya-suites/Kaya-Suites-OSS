@@ -6,12 +6,13 @@ import type { ProposedEdit } from "@/types/chat";
 
 type Props = {
   edit: ProposedEdit;
+  editedText: string;
+  onTextChange: (editId: string, text: string) => void;
   onApprove: (editId: string, finalText: string) => Promise<void>;
   onReject: (editId: string) => void;
 };
 
-export function DiffReview({ edit, onApprove, onReject }: Props) {
-  const [editedText, setEditedText] = useState(edit.proposed);
+export function DiffReview({ edit, editedText, onTextChange, onApprove, onReject }: Props) {
   const [loading, setLoading] = useState(false);
 
   if (edit.status === "approved") {
@@ -83,7 +84,7 @@ export function DiffReview({ edit, onApprove, onReject }: Props) {
         <div className="mb-1.5 text-xs text-stone-400 uppercase tracking-wide font-sans">Edit before approving</div>
         <textarea
           value={editedText}
-          onChange={(e) => setEditedText(e.target.value)}
+          onChange={(e) => onTextChange(edit.id, e.target.value)}
           rows={3}
           className="w-full text-sm font-mono border border-stone-200 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1A73E8] focus:border-transparent resize-y bg-white text-stone-800 leading-relaxed"
         />

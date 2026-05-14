@@ -11,8 +11,10 @@
 //! from disk; the index is only used to map UUIDs to file paths.
 
 pub mod document;
+pub mod session;
 pub mod sqlite;
 
 // Re-export the trait so callers can depend on only this crate.
 pub use kaya_core::StorageAdapter;
+pub use session::SqliteSessionStorage;
 pub use sqlite::SqliteAdapter;

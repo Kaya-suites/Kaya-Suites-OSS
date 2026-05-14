@@ -4,6 +4,7 @@
 members = [
   "crates/kaya-core",
   "crates/kaya-storage",
+  "crates/kaya-server",
   "bin/kaya-oss",
 ]
 resolver = "2"

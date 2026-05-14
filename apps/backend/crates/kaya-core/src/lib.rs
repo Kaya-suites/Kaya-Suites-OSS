@@ -4,6 +4,7 @@ pub mod edit;
 pub mod error;
 pub mod model_router;
 pub mod retrieval;
+pub mod session;
 pub mod storage;
 
 // agent is declared here; populated in the next step
@@ -17,4 +18,5 @@ pub use model_router::{
     ConfigError, LlmProvider, Meter, ModelRouter, OperationType, TokenUsage,
 };
 pub use retrieval::{RetrievalResult, chunk_document, index_document_chunks, make_paragraph_id, retrieve};
+pub use session::{MessageRecord, Session, SessionError, SessionStorage};
 pub use storage::{Chunk, ChunkHit, Document, Embedding, StorageAdapter, StorageError};

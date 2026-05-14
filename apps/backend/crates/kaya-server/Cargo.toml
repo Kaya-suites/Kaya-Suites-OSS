@@ -1,0 +1,20 @@
+[package]
+name    = "kaya-server"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "Shared HTTP handlers for Kaya Suites — Apache 2.0 layer mounted by both binaries"
+
+[dependencies]
+kaya-core   = { path = "../kaya-core" }
+
+axum         = { workspace = true }
+tokio        = { workspace = true }
+serde        = { workspace = true }
+serde_json   = { workspace = true }
+uuid         = { workspace = true }
+chrono       = { workspace = true }
+bytes        = { workspace = true }
+futures      = { workspace = true }
+tokio-stream = { version = "0.1", features = ["sync"] }
+tracing      = "0.1"

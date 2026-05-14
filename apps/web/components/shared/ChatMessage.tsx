@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
@@ -15,6 +16,10 @@ type Props = {
   onRejectEdit: (editId: string) => void;
   onApproveDelete: (editId: string) => Promise<void>;
   onRejectDelete: (editId: string) => void;
+  onEditTextChange: (editId: string, text: string) => void;
+  editTexts: Record<string, string>;
+  onApproveAll: (messageId: string) => Promise<void>;
+  onRejectAll: (messageId: string) => void;
 };
 
 // Replace [n] patterns with superscript citation chips
@@ -63,7 +68,12 @@ export function ChatMessage({
   onRejectEdit,
   onApproveDelete,
   onRejectDelete,
+  onEditTextChange,
+  editTexts,
+  onApproveAll,
+  onRejectAll,
 }: Props) {
+  const [approveAllLoading, setApproveAllLoading] = useState(false);
   const isUser = message.role === "user";
 
   // Build markdown components with citation injection
@@ -168,6 +178,19 @@ export function ChatMessage({
     );
   }
 
+  const pendingEdits = message.proposedEdits?.filter((e) => e.status === "pending") ?? [];
+  const pendingDeletes = message.proposedDeletes?.filter((d) => d.status === "pending") ?? [];
+  const pendingCount = pendingEdits.length + pendingDeletes.length;
+
+  async function handleApproveAll() {
+    setApproveAllLoading(true);
+    try {
+      await onApproveAll(message.id);
+    } finally {
+      setApproveAllLoading(false);
+    }
+  }
+
   return (
     <div className="flex mb-5 gap-3">
       {/* Agent avatar */}
@@ -188,22 +211,45 @@ export function ChatMessage({
           )}
         </div>
 
-        {/* Diff review panel */}
-        {message.proposedEdit && (
+        {/* Diff review panels */}
+        {message.proposedEdits?.map((edit) => (
           <DiffReview
-            edit={message.proposedEdit}
+            key={edit.id}
+            edit={edit}
+            editedText={editTexts[edit.id] ?? edit.proposed}
+            onTextChange={onEditTextChange}
             onApprove={onApproveEdit}
             onReject={onRejectEdit}
           />
-        )}
+        ))}
 
-        {/* Delete confirmation panel */}
-        {message.proposedDelete && (
+        {/* Delete confirmation panels */}
+        {message.proposedDeletes?.map((deletion) => (
           <DeleteReview
-            deletion={message.proposedDelete}
+            key={deletion.id}
+            deletion={deletion}
             onApprove={onApproveDelete}
             onReject={onRejectDelete}
           />
+        ))}
+
+        {/* Batch actions — shown when 2+ items are still pending */}
+        {pendingCount >= 2 && (
+          <div className="mt-3 flex items-center gap-2 justify-end border-t border-stone-100 pt-3">
+            <button
+              onClick={() => onRejectAll(message.id)}
+              className="px-3 py-1.5 text-sm rounded text-stone-500 hover:text-stone-700 hover:bg-stone-100 transition-colors"
+            >
+              Reject all
+            </button>
+            <button
+              onClick={handleApproveAll}
+              disabled={approveAllLoading}
+              className="px-4 py-1.5 text-sm rounded bg-[#1A73E8] text-white font-medium hover:bg-[#1557B0] disabled:opacity-60 transition-colors"
+            >
+              {approveAllLoading ? "Approving…" : `Approve all (${pendingCount})`}
+            </button>
+          </div>
         )}
 
         {/* Citation list */}

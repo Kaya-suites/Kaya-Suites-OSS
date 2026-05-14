@@ -28,8 +28,8 @@ export type ChatMessageData = {
   role: Role;
   content: string;
   citations: CitationRef[];
-  proposedEdit?: ProposedEdit;
-  proposedDelete?: ProposedDelete;
+  proposedEdits?: ProposedEdit[];
+  proposedDeletes?: ProposedDelete[];
   timestamp: number;
 };
 

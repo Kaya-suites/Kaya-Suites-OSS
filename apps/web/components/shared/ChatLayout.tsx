@@ -5,6 +5,8 @@ import type { ChatSession, CitationRef } from "@/types/chat";
 import { SessionRail } from "./SessionRail";
 import { ChatPanel } from "./ChatPanel";
 import { DocumentPanel } from "./DocumentPanel";
+import { OnboardingChecklist } from "./OnboardingChecklist";
+import { useOnboarding } from "@/hooks/useOnboarding";
 
 async function fetchSessions(): Promise<ChatSession[]> {
   try {
@@ -34,6 +36,7 @@ export function ChatLayout() {
   const [openDocId, setOpenDocId] = useState<string | null>(null);
   const [scrollToParagraphId, setScrollToParagraphId] = useState<string | null>(null);
   const [docRefreshKey, setDocRefreshKey] = useState(0);
+  const onboarding = useOnboarding();
 
   // On mount: load existing sessions; if none, create one.
   useEffect(() => {
@@ -51,6 +54,18 @@ export function ChatLayout() {
       }
     })();
   }, []);
+
+  // Auto-complete add_document if documents already exist
+  useEffect(() => {
+    if (!onboarding.isLoaded || onboarding.state?.completed.add_document) return;
+    fetch("/api/documents")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((docs: unknown[]) => {
+        if (docs.length > 0) onboarding.markStepComplete("add_document");
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onboarding.isLoaded]);
 
   function handleCitationClick(ref: CitationRef) {
     setOpenDocId(ref.docId);
@@ -78,7 +93,7 @@ export function ChatLayout() {
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-stone-50">
+    <div className="flex h-full overflow-hidden bg-stone-50">
       {/* Session rail — hidden on mobile */}
       <div className="hidden md:flex shrink-0">
         <SessionRail
@@ -124,6 +139,7 @@ export function ChatLayout() {
           sessionId={sessionId}
           onCitationClick={handleCitationClick}
           onDocumentUpdated={handleDocumentUpdated}
+          onStepComplete={onboarding.markStepComplete}
         />
       </div>
 
@@ -138,6 +154,17 @@ export function ChatLayout() {
           />
         </div>
       )}
+
+      {/* Onboarding checklist — rendered outside the flex layout to avoid reflowing panes */}
+      <OnboardingChecklist
+        isLoaded={onboarding.isLoaded}
+        dismissed={onboarding.state?.dismissed ?? false}
+        steps={onboarding.steps}
+        demoSeeded={onboarding.state?.demoSeeded ?? false}
+        onDismiss={onboarding.dismiss}
+        onSeedDemo={onboarding.seedDemo}
+        onMarkComplete={onboarding.markStepComplete}
+      />
     </div>
   );
 }

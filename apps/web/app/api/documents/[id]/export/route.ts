@@ -5,12 +5,15 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 // Proxy the PDF download so the browser gets it as an attachment regardless
 // of CORS configuration on the Rust backend.
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const { id } = await params;
+  const cookie = req.headers.get("cookie") ?? "";
   try {
-    const res = await fetch(`${API_URL}/documents/${id}/export.pdf`);
+    const res = await fetch(`${API_URL}/documents/${id}/export.pdf`, {
+      headers: { ...(cookie && { cookie }) },
+    });
     if (!res.ok) {
       return Response.json({ error: "not found" }, { status: res.status });
     }
