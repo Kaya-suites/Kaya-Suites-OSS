@@ -197,4 +197,14 @@ impl SessionStorage for SqliteSessionStorage {
         .map_err(box_err)?;
         Ok(())
     }
+
+    async fn rename_session(&self, session_id: Uuid, title: String) -> Result<(), SessionError> {
+        sqlx::query("UPDATE sessions SET title = ? WHERE id = ?")
+            .bind(&title)
+            .bind(session_id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(box_err)?;
+        Ok(())
+    }
 }

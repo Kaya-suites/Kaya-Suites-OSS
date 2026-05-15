@@ -92,6 +92,21 @@ export function ChatLayout() {
     setOpenDocId(null);
   }, []);
 
+  const handleSessionRenamed = useCallback((id: string, title: string) => {
+    setSessions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, title } : s)),
+    );
+  }, []);
+
+  const handleRenameSession = useCallback(async (id: string, title: string) => {
+    handleSessionRenamed(id, title);
+    await fetch(`/api/sessions/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    }).catch(() => {});
+  }, [handleSessionRenamed]);
+
   return (
     <div className="flex h-full overflow-hidden bg-stone-50">
       {/* Session rail — hidden on mobile */}
@@ -101,6 +116,7 @@ export function ChatLayout() {
           currentSessionId={sessionId}
           onSelect={handleSessionSelect}
           onNew={handleNewSession}
+          onRename={handleRenameSession}
         />
       </div>
 
@@ -140,6 +156,7 @@ export function ChatLayout() {
           onCitationClick={handleCitationClick}
           onDocumentUpdated={handleDocumentUpdated}
           onStepComplete={onboarding.markStepComplete}
+          onSessionRenamed={handleSessionRenamed}
         />
       </div>
 

@@ -53,6 +53,8 @@ pub async fn chat_stream(
         .await
         .unwrap_or_default();
 
+    let is_first_turn = prior_messages.is_empty();
+
     let _ = sessions.touch_session(session_id).await;
 
     let _ = sessions
@@ -71,6 +73,7 @@ pub async fn chat_stream(
             session_id,
             message,
             prior_messages,
+            is_first_turn,
             tx,
         )
         .await;
@@ -95,17 +98,18 @@ async fn run_agent_stream(
     session_id: Uuid,
     message: String,
     prior_messages: Vec<(String, String)>,
+    is_first_turn: bool,
     tx: tokio::sync::mpsc::Sender<Bytes>,
 ) {
     let session = UserSession { user_id: Uuid::nil() };
     let ctx = Arc::new(AgentContext {
         storage: storage.clone(),
-        router,
+        router: router.clone(),
         session,
     });
     let log = Arc::new(InvocationLog::new());
     let agent = AgentLoop::new(default_tools());
-    let mut events = agent.run(message, prior_messages, ctx, log);
+    let mut events = agent.run(message.clone(), prior_messages, ctx, log);
 
     let mut doc_title_cache: HashMap<Uuid, String> = HashMap::new();
     let mut assistant_text = String::new();
@@ -223,6 +227,23 @@ async fn run_agent_stream(
                 &citations_json,
             )
             .await;
+
+        if is_first_turn {
+            let naming_prompt = format!(
+                "Generate a short title (3–6 words, no quotes, no trailing punctuation) \
+                 for a conversation that starts with this user message:\n\n{message}\n\nTitle:"
+            );
+            if let Ok(resp) = router
+                .complete(kaya_core::model_router::OperationType::RetrievalClassification, naming_prompt)
+                .await
+            {
+                let title = resp.content.trim().trim_matches('"').trim_matches('\'').to_string();
+                if !title.is_empty() {
+                    let _ = sessions.rename_session(session_id, title.clone()).await;
+                    send!(json!({"type": "SessionRenamed", "sessionId": session_id, "title": title}));
+                }
+            }
+        }
     }
 
     send!(json!({"type": "Done"}));

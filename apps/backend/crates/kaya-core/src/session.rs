@@ -63,4 +63,6 @@ pub trait SessionStorage: Send + Sync {
     ) -> Result<(), SessionError>;
     /// Update the session's `updated_at` timestamp (and `message_count` where tracked).
     async fn touch_session(&self, session_id: Uuid) -> Result<(), SessionError>;
+    /// Rename the session, replacing its current title.
+    async fn rename_session(&self, session_id: Uuid, title: String) -> Result<(), SessionError>;
 }

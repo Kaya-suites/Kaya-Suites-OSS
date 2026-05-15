@@ -1,4 +1,4 @@
-use axum::{Router, routing::{get, post}};
+use axum::{Router, routing::{get, patch, post}};
 
 mod chat;
 mod documents;
@@ -29,6 +29,7 @@ where
         )
         .route("/documents/{id}/export.pdf", get(documents::export_document_pdf))
         .route("/sessions", get(sessions::list_sessions).post(sessions::create_session))
+        .route("/sessions/{id}", patch(sessions::rename_session))
         .route("/sessions/{id}/messages", get(sessions::get_session_messages))
         .route("/sessions/{id}/chat", post(chat::chat_stream))
         .route("/edits/{id}/approve", post(edits::approve_edit))

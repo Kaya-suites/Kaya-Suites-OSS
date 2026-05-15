@@ -18,6 +18,7 @@ type Props = {
   onCitationClick: (ref: CitationRef) => void;
   onDocumentUpdated: (docId: string) => void;
   onStepComplete?: (step: OnboardingStep) => void;
+  onSessionRenamed?: (sessionId: string, title: string) => void;
 };
 
 function randomId(): string {
@@ -42,7 +43,7 @@ const WELCOME: ChatMessageData = {
   timestamp: Date.now(),
 };
 
-export function ChatPanel({ sessionId, onCitationClick, onDocumentUpdated, onStepComplete }: Props) {
+export function ChatPanel({ sessionId, onCitationClick, onDocumentUpdated, onStepComplete, onSessionRenamed }: Props) {
   const [messages, setMessages] = useState<ChatMessageData[]>([WELCOME]);
   const [streamingId, setStreamingId] = useState<string | null>(null);
   // Tracks current text for each pending edit card so "Approve All" reads the right value
@@ -209,6 +210,8 @@ export function ChatPanel({ sessionId, onCitationClick, onDocumentUpdated, onSte
                 docTitle: event.docTitle,
                 status: "pending",
               });
+            } else if (event.type === "SessionRenamed") {
+                onSessionRenamed?.(event.sessionId, event.title);
             } else if (event.type === "Done") {
               // Flush all buffered edits/deletes at once so cards appear together
               const edits = editBufferRef.current;

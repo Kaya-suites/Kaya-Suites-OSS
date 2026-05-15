@@ -54,5 +54,6 @@ export type SSEEvent =
   | { type: "CitationFound"; docId: string; paragraphId: string; label: number; title: string }
   | { type: "ProposedEditEmitted"; editId: string; docId: string; paragraphId: string; original: string; proposed: string }
   | { type: "ProposedDeleteEmitted"; editId: string; docId: string; docTitle: string }
+  | { type: "SessionRenamed"; sessionId: string; title: string }
   | { type: "Done" }
   | { type: "Error"; message: string };

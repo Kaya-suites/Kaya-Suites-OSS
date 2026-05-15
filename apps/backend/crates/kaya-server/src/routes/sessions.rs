@@ -43,6 +43,25 @@ pub async fn create_session(
     Ok((StatusCode::CREATED, Json(session)))
 }
 
+// ── PATCH /sessions/:id ───────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct RenameSessionBody {
+    pub title: String,
+}
+
+pub async fn rename_session(
+    Extension(sessions): Extension<Arc<dyn SessionStorage>>,
+    Path(session_id): Path<Uuid>,
+    Json(body): Json<RenameSessionBody>,
+) -> Result<StatusCode, ApiError> {
+    sessions
+        .rename_session(session_id, body.title)
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 // ── GET /sessions/:id/messages ────────────────────────────────────────────────
 
 #[derive(Serialize)]
